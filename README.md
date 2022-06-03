@@ -14,7 +14,7 @@ This repository contains the set of scripts used to train, generate and validate
 
 ## Getting Started
 
-The setup script creates necessary folders used to save model checkpoints, generated showers and validation plots.
+The setup script creates necessary folders used to save model checkpoints, generate showers and validation plots.
 
 ```
 python3 setup.py

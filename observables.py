@@ -47,4 +47,60 @@ def lateral_profile(G4,VAE,energyParticle,angleParticle,geometry,saveDir,yLogSca
 	axes[1].axhline(y=1, color='black')
 	plt.savefig("%sLatProf_Geo_%s_E_%s_Angle_%s.png" %(saveDir, geometry, energyParticle, angleParticle))
 	plt.show()
+	
+# Total energy distribution comparing full and fast simulation data of a single geometry, energy and angle of primary particles
+def Etot(G4, VAE, energyParticle, angleParticle, geometry, saveDir, yLogScale=True):
+    plt.figure(figsize=(12, 8))
+    bins = np.linspace(np.min(G4), np.max(VAE), 50)
+    plt.hist(G4, histtype='step', label='FullSim', bins=bins, color='black')
+    plt.hist(VAE, histtype='step', label='MLSim', bins=bins, color='red')
+    plt.legend()
+    if(yLogScale):
+        plt.yscale('log')
+    plt.xlabel('Energy [MeV]')
+    plt.ylabel('# events')
+    plt.savefig("%sEtot_Geo_%s_E_%s_Angle_%s.png" % (saveDir, geometry, energyParticle, angleParticle))
+    plt.show()
 
+# Energy per layer distribution comparing full and fast simulation data of a single geometry, energy and angle of primary particles
+def energy_layer(G4, VAE, energyParticle, angleParticle, geometry, saveDir, yLogScale=True):
+    fig, ax = plt.subplots(5, 9, figsize=(20, 20))
+    cpt = 0
+    for i in range(5):
+        for j in range(9):
+            g4_l = np.array([np.sum(i) for i in G4[:, :, :, i, j]])  
+            vae_l = np.array([np.sum(i) for i in VAE[:, :, :, i, j]])  
+            bins = np.linspace(0, np.max(g4_l), 15)
+            n_g4, bins_g4, _ = ax[i][j].hist(g4_l, histtype='step', label='FullSim', bins=bins, color='black')
+            n_vae, bins_vae, _ = ax[i][j].hist(vae_l, histtype='step', label='FastSim', bins=bins, color='red')
+            bin_width_g4 = bins_g4[1] - bins_g4[0]
+            bin_width_vae = bins_vae[1] - bins_vae[0]
+            ax[i][j].set_title("Layer %s" % cpt, fontsize=12)
+            cpt += 1
+    plt.savefig("%sELayer_Geo_%s_E_%s_Angle_%s.png" %(saveDir, geometry, energyParticle, angleParticle))
+    plt.show()
+
+# Cell energy distribution comparing full and fast simulation data of a single geometry, energy and angle of primary particles
+def cell_energy(G4, VAE, energyParticle, angleParticle, geometry, saveDir, yLogScale=True):
+    def log_energy(events, colour, label):
+        all_logEn = []
+        for ev in range(len(events)):
+            energies = events[ev]
+            for en in energies:
+                if(en > 0):
+                    all_logEn.append(np.log10(en))
+                else:
+                    all_logEn.append(0)
+        return plt.hist(all_logEn, bins=np.linspace(-10, 1, 1000), facecolor=colour, histtype='step', label=label)
+    plt.figure(figsize=(12, 8))
+    log_energy(G4, 'b', 'FullSim')
+    log_energy(VAE, 'r', 'FastSim')
+    plt.xlabel('log10(E//MeV)')
+    plt.ylim(bottom=1)
+    plt.yscale('log')
+    plt.ylim(bottom=1)
+    plt.ylabel('# entries')
+    plt.grid(True)
+    plt.legend()
+    plt.savefig("%sCellEDist_Log_Geo_%s_E_%s_Angle_%s.png" %(saveDir, geometry, energyParticle, angleParticle))
+    plt.show()

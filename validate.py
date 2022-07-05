@@ -56,23 +56,13 @@ def main(argv):
 	    TP_VAE.append(np.mean(np.array([np.sum(i) for i in ELayer_VAE[:, i, :, :]])))
 	longitudinal_profile(LP_G4,LP_VAE,energyParticle,angleParticle,geometry,valid_dir)
 	lateral_profile(TP_G4,TP_VAE,energyParticle,angleParticle,geometry,valid_dir)
-
+	G4 = ELayer_G4.reshape(len(ELayer_G4), 40500)
+	VAE = ELayer_VAE.reshape(len(ELayer_VAE), 40500)
+	sumG4 = np.array([np.sum(i) for i in G4])
+	sumVAE = np.array([np.sum(i) for i in VAE])
+	Etot(sumG4, sumVAE, energyParticle, angleParticle, geometry, valid_dir)
+	cell_energy(G4, VAE, energyParticle, angleParticle, geometry, valid_dir)
+	energy_layer(ELayer_G4.reshape(len(ELayer_G4), 18, 50, 5, 9), ELayer_VAE.reshape(len(ELayer_VAE), 18, 50, 5, 9), energyParticle, angleParticle, geometry, valid_dir)
+	
 if __name__ == '__main__':
     exit(main(sys.argv[1:]))
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

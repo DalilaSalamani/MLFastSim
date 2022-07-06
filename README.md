@@ -2,7 +2,7 @@
 
 This repository contains the set of scripts used to train, generate and validate the generative model used in [Par04](https://gitlab.cern.ch/geant4/geant4/-/tree/master/examples/extended/parameterisations/Par04) Geant4 example.
 
-- configure: defines the set of commun variables.
+- configure: defines the set of common variables.
 - model: defines the VAE model class.
 - instantiate_model: instantiate a VAE model and define all the parameters.
 - preprocess: defines the data loading and preprocessing functions. 

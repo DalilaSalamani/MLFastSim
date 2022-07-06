@@ -3,14 +3,12 @@
 generate showers using a saved VAE model 
 """
 import argparse
-import sys
 
 import numpy as np
 
 from instantiate_model import *
-from preprocess import getConditionArrays
+from preprocess import get_condition_arrays
 
-# parse_args function
 """
     - geometry : name of the calorimeter geometry (eg: SiW, SciPb)
     - energyParticle : energy of the primary particle in GeV units
@@ -20,7 +18,7 @@ from preprocess import getConditionArrays
 """
 
 
-def parse_args(argv):
+def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--geometry", type=str, default="")
     p.add_argument("--energyParticle", type=int, default="")
@@ -32,34 +30,34 @@ def parse_args(argv):
 
 
 # main function
-def main(argv):
+def main():
     # Parse commandline arguments
-    args = parse_args(argv)
-    energyParticle = args.energyParticle
-    angleParticle = args.angleParticle
+    args = parse_args()
+    energy_particle = args.energyParticle
+    angle_particle = args.angleParticle
     geometry = args.geometry
-    nbEvents = args.nbEvents
+    nb_events = args.nbEvents
     epoch = args.epoch
     # Get list of common variables
     variables = Configure()
     # 1. Get condition values
-    condE, condAngle, condGeo = getConditionArrays(geometry, energyParticle, angleParticle, nbEvents)
+    cond_e, cond_angle, cond_geo = get_condition_arrays(geometry, energy_particle, nb_events)
     # 2. Load a saved model
     vae = instantiate()
     # Load the saved weights
-    vae.vae.load_weights('%sVAE-%s.h5' % (variables.checkpoint_dir, epoch))
+    vae.vae.load_weights(f"{variables.checkpoint_dir}VAE-{epoch}.h5")
     # The generator is defined as the decoder part only
     generator = vae.decoder
     # 3. Generate showers using the VAE model by sampling from the prior (normal distribution) in d dimension
     # (d=latent_dim, latent space dimension)
-    zR = np.random.normal(loc=0, scale=1, size=(nbEvents, vae.latent_dim))
-    z = np.column_stack((zR, condE[:nbEvents], condAngle[:nbEvents], condGeo[:nbEvents]))
-    generatedEvents = (generator.predict(z)) * (energyParticle * 1000)
+    z_r = np.random.normal(loc=0, scale=1, size=(nb_events, vae.latent_dim))
+    z = np.column_stack((z_r, cond_e[:nb_events], cond_angle[:nb_events], cond_geo[:nb_events]))
+    generated_events = (generator.predict(z)) * (energy_particle * 1000)
     # 4. Save the generated showers
     np.savetxt(
-        "%sVAE_Generated_Geo_%s_E_%s_Angle_%s.txt" % (variables.gen_dir, geometry, energyParticle, angleParticle),
-        generatedEvents)
+        f"{variables.gen_dir}VAE_Generated_Geo_{geometry}_E_{energy_particle}_Angle_{angle_particle}.txt",
+        generated_events)
 
 
-if __name__ == '__main__':
-    exit(main(sys.argv[1:]))
+if __name__ == "__main__":
+    exit(main())

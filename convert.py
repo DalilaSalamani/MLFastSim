@@ -4,12 +4,12 @@ defines the conversion function to and ONNX file
 """
 
 import argparse
-# Imports
 import sys
+
+import keras2onnx
 
 from instantiate_model import *
 
-# parse_args function
 """
     epoch: epoch of the saved checkpoint model
 """
@@ -33,16 +33,15 @@ def main(argv):
     # Instantiate and load a saved model 
     vae = instantiate()
     # Load the saved weights
-    vae.vae.load_weights('%sVAE-%s.h5' % (variables.checkpoint_dir, epoch))
+    vae.vae.load_weights("%sVAE-%s.h5" % (variables.checkpoint_dir, epoch))
 
     # 2. Convert the model to ONNX format
-    import keras2onnx
-    # Create the Keras model and convert itinto an ONNX model
-    kerasModel = vae.decoder
-    onnxModel = keras2onnx.convert_keras(kerasModel, "name")
+    # Create the Keras model and convert it into an ONNX model
+    keras_model = vae.decoder
+    onnx_model = keras2onnx.convert_keras(keras_model, "name")
     # Save the ONNX model. Generator.onnx can then be used to perform the inference in the example
-    keras2onnx.save_model(onnxModel, "%sGenerator.onnx" % variables.conversion)
+    keras2onnx.save_model(onnx_model, "Generator.onnx")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     exit(main(sys.argv[1:]))

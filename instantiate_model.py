@@ -25,13 +25,13 @@ def instantiate():
                     epochs=10000,
                     lr=0.001,
                     activ=tensorflow.keras.layers.LeakyReLU(),
-                    outActiv='sigmoid',
+                    outActiv="sigmoid",
                     validation_split=0.05,
                     wReco=variables.original_dim,
                     wkl=0.5,
                     optimizer=tensorflow.keras.optimizers.Adam(),
-                    ki='RandomNormal',
-                    bi='Zeros',
+                    ki="RandomNormal",
+                    bi="Zeros",
                     earlyStop=False,
                     checkpoint_dir=variables.checkpoint_dir
                     )

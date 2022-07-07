@@ -4,10 +4,9 @@ creates validation plots using shower observables
 """
 
 import argparse
-import sys
 
 from observables import *
-from preprocess import load1E1A1Geo
+from preprocess import load_showers
 
 # parse_args function
 """
@@ -17,7 +16,7 @@ from preprocess import load1E1A1Geo
 """
 
 
-def parse_args(argv):
+def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--geometry", type=str, default="")
     p.add_argument("--energyParticle", type=int, default="")
@@ -27,46 +26,44 @@ def parse_args(argv):
 
 
 # main function
-def main(argv):
+def main():
     # Parse commandline arguments
-    args = parse_args(argv)
-    energyParticle = args.energyParticle
-    angleParticle = args.angleParticle
+    args = parse_args()
+    energy_particle = args.energyParticle
+    angle_particle = args.angleParticle
     geometry = args.geometry
-    # Get list of common variables
-    variables = Configure()
     # 1. Full simulation data loading
     # Load energy of showers from a single geometry, energy and angle
-    ELayer_G4 = load1E1A1Geo(variables.init_dir, geometry, energyParticle, angleParticle)
+    e_layer_g4 = load_showers(variables.init_dir, geometry, energy_particle, angle_particle)
     valid_dir = variables.valid_dir
     # 2. Fast simulation data loading, scaling to original energy range & reshaping
-    VAE_energies = np.loadtxt(
-        "%sVAE_Generated_Geo_%s_E_%s_Angle_%s.txt" % (variables.gen_dir, geometry, energyParticle, angleParticle)) * (
-                           energyParticle * 1000)
+    vae_energies = np.loadtxt(
+        f"{variables.gen_dir}VAE_Generated_Geo_{geometry}_E_{energy_particle}_Angle_{angle_particle}.txt") * (
+                           energy_particle * 1000)
     # Reshape the events into 3D
-    ELayer_VAE = (VAE_energies).reshape(len(VAE_energies), variables.nCells_r, variables.nCells_phi, variables.nCells_z)
+    e_layer_vae = vae_energies.reshape(len(vae_energies), variables.nCells_r, variables.nCells_phi, variables.nCells_z)
     # 3. Plot observables
-    LP_G4 = []
-    LP_VAE = []
-    TP_G4 = []
-    TP_VAE = []
+    lp_g4 = []
+    lp_vae = []
+    tp_g4 = []
+    tp_vae = []
     for i in range(variables.nCells_z):
-        LP_G4.append(np.mean(np.array([np.sum(i) for i in ELayer_G4[:, :, :, i]])))
-        LP_VAE.append(np.mean(np.array([np.sum(i) for i in ELayer_VAE[:, :, :, i]])))
+        lp_g4.append(np.mean(np.array([np.sum(i) for i in e_layer_g4[:, :, :, i]])))
+        lp_vae.append(np.mean(np.array([np.sum(i) for i in e_layer_vae[:, :, :, i]])))
     for i in range(variables.nCells_r):
-        TP_G4.append(np.mean(np.array([np.sum(i) for i in ELayer_G4[:, i, :, :]])))
-        TP_VAE.append(np.mean(np.array([np.sum(i) for i in ELayer_VAE[:, i, :, :]])))
-    longitudinal_profile(LP_G4, LP_VAE, energyParticle, angleParticle, geometry, valid_dir)
-    lateral_profile(TP_G4, TP_VAE, energyParticle, angleParticle, geometry, valid_dir)
-    G4 = ELayer_G4.reshape(len(ELayer_G4), 40500)
-    VAE = ELayer_VAE.reshape(len(ELayer_VAE), 40500)
-    sumG4 = np.array([np.sum(i) for i in G4])
-    sumVAE = np.array([np.sum(i) for i in VAE])
-    Etot(sumG4, sumVAE, energyParticle, angleParticle, geometry, valid_dir)
-    cell_energy(G4, VAE, energyParticle, angleParticle, geometry, valid_dir)
-    energy_layer(ELayer_G4.reshape(len(ELayer_G4), 18, 50, 5, 9), ELayer_VAE.reshape(len(ELayer_VAE), 18, 50, 5, 9),
-                 energyParticle, angleParticle, geometry, valid_dir)
+        tp_g4.append(np.mean(np.array([np.sum(i) for i in e_layer_g4[:, i, :, :]])))
+        tp_vae.append(np.mean(np.array([np.sum(i) for i in e_layer_vae[:, i, :, :]])))
+    longitudinal_profile(lp_g4, lp_vae, energy_particle, angle_particle, geometry, valid_dir)
+    lateral_profile(tp_g4, tp_vae, energy_particle, angle_particle, geometry, valid_dir)
+    g4 = e_layer_g4.reshape(len(e_layer_g4), 40500)
+    vae = e_layer_vae.reshape(len(e_layer_vae), 40500)
+    sum_g4 = np.array([np.sum(i) for i in g4])
+    sum_vae = np.array([np.sum(i) for i in vae])
+    e_tot(sum_g4, sum_vae, energy_particle, angle_particle, geometry, valid_dir)
+    cell_energy(g4, vae, energy_particle, angle_particle, geometry, valid_dir)
+    energy_layer(e_layer_g4.reshape(len(e_layer_g4), 18, 50, 5, 9), e_layer_vae.reshape(len(e_layer_vae), 18, 50, 5, 9),
+                 energy_particle, angle_particle, geometry, valid_dir)
 
 
-if __name__ == '__main__':
-    exit(main(sys.argv[1:]))
+if __name__ == "__main__":
+    exit(main())

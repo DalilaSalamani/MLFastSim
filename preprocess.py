@@ -7,7 +7,7 @@ import h5py
 import numpy as np
 
 # preprocess function loads the data and returns the array of the shower energies and the condition arrays
-from constants import INIT_DIR, ORIGINAL_DIM, MAX_ENERGY, MAX_ANGLE, MIN_ANGLE
+from constants import INIT_DIR, ORIGINAL_DIM, MAX_ENERGY, MAX_ANGLE, MIN_ANGLE, MIN_ENERGY
 
 
 def preprocess():
@@ -25,8 +25,7 @@ def preprocess():
             # read the HDF5 file
             h5 = h5py.File(f_name, "r")
             # loop over energies from min_energy to max_energy
-            # energy_particle = variables.min_energy
-            energy_particle = 1024
+            energy_particle = MIN_ENERGY
             while energy_particle <= MAX_ENERGY:
                 # scale the energy of each cell to the energy of the primary particle (in MeV units)
                 events = np.array(h5[f"{energy_particle}"]) / (energy_particle * 1000)

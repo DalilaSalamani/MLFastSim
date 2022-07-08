@@ -5,7 +5,7 @@ instantiate a VAE model and define all the parameters
 
 from constants import BATCH_SIZE, ORIGINAL_DIM, INTERMEDIATE_DIM1, INTERMEDIATE_DIM2, INTERMEDIATE_DIM3, \
     INTERMEDIATE_DIM4, LATENT_DIM, EPOCHS, LR, ACTIVATION, OUT_ACTIVATION, VALIDATION_SPLIT, \
-    OPTIMIZER, KERNEL_INITIALIZER, BIAS_INITIALIZER, EARLY_STOP, CHECKPOINT_DIR
+    OPTIMIZER, KERNEL_INITIALIZER, BIAS_INITIALIZER, EARLY_STOP, CHECKPOINT_DIR, SAVE_FREQ
 from model import VAE
 
 
@@ -26,6 +26,7 @@ def instantiate():
               kernel_initializer=KERNEL_INITIALIZER,
               bias_initializer=BIAS_INITIALIZER,
               early_stop=EARLY_STOP,
-              checkpoint_dir=CHECKPOINT_DIR
+              checkpoint_dir=CHECKPOINT_DIR,
+              save_freq=SAVE_FREQ
               )
     return vae

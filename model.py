@@ -31,42 +31,44 @@ class VAE:
                  intermediate_dim2: int, intermediate_dim3: int, intermediate_dim4: int, lr: float, epochs: int,
                  activation: Layer, out_activation: str, validation_split: float, optimizer: OptimizerV2,
                  kernel_initializer: str, bias_initializer: str, checkpoint_dir: str,
-                 early_stop: bool):
-        self.original_dim = original_dim
+                 early_stop: bool, save_freq: int):
+        self._original_dim = original_dim
         self.latent_dim = latent_dim
-        self.batch_size = batch_size
-        self.intermediate_dim1 = intermediate_dim1
-        self.intermediate_dim2 = intermediate_dim2
-        self.intermediate_dim3 = intermediate_dim3
-        self.intermediate_dim4 = intermediate_dim4
-        self.lr = lr
-        self.epochs = epochs
-        self.activation = activation
-        self.out_activation = out_activation
-        self.validation_split = validation_split
-        self.optimizer = optimizer
-        self.kernel_initializer = kernel_initializer
-        self.bias_initializer = bias_initializer
-        self.checkpoint_dir = checkpoint_dir
-        self.early_stop = early_stop
+        self._batch_size = batch_size
+        self._intermediate_dim1 = intermediate_dim1
+        self._intermediate_dim2 = intermediate_dim2
+        self._intermediate_dim3 = intermediate_dim3
+        self._intermediate_dim4 = intermediate_dim4
+        # TODO(@mdragula): _lr is not passed to optimizer so this parameters is unused
+        self._lr = lr
+        self._epochs = epochs
+        self._activation = activation
+        self._out_activation = out_activation
+        self._validation_split = validation_split
+        self._optimizer = optimizer
+        self._kernel_initializer = kernel_initializer
+        self._bias_initializer = bias_initializer
+        self._checkpoint_dir = checkpoint_dir
+        self._early_stop = early_stop
+        self._save_freq = save_freq
 
         # Build the encoder
-        x_in = Input((self.original_dim,))
+        x_in = Input((self._original_dim,))
         e_cond = Input(shape=(1,))
         angle_cond = Input(shape=(1,))
         geo_cond = Input(shape=(2,))
         merged_input = concatenate([x_in, e_cond, angle_cond, geo_cond], )
-        h1 = Dense(self.intermediate_dim1, activation=self.activation,
-                   kernel_initializer=self.kernel_initializer, bias_initializer=self.bias_initializer)(merged_input)
+        h1 = Dense(self._intermediate_dim1, activation=self._activation,
+                   kernel_initializer=self._kernel_initializer, bias_initializer=self._bias_initializer)(merged_input)
         h1 = BatchNormalization()(h1)
-        h2 = Dense(self.intermediate_dim2, activation=self.activation,
-                   kernel_initializer=self.kernel_initializer, bias_initializer=self.bias_initializer)(h1)
+        h2 = Dense(self._intermediate_dim2, activation=self._activation,
+                   kernel_initializer=self._kernel_initializer, bias_initializer=self._bias_initializer)(h1)
         h2 = BatchNormalization()(h2)
-        h3 = Dense(self.intermediate_dim3, activation=self.activation,
-                   kernel_initializer=self.kernel_initializer, bias_initializer=self.bias_initializer)(h2)
+        h3 = Dense(self._intermediate_dim3, activation=self._activation,
+                   kernel_initializer=self._kernel_initializer, bias_initializer=self._bias_initializer)(h2)
         h3 = BatchNormalization()(h3)
-        h4 = Dense(self.intermediate_dim4, activation=self.activation,
-                   kernel_initializer=self.kernel_initializer, bias_initializer=self.bias_initializer)(h3)
+        h4 = Dense(self._intermediate_dim4, activation=self._activation,
+                   kernel_initializer=self._kernel_initializer, bias_initializer=self._bias_initializer)(h3)
         h = BatchNormalization()(h4)
         z_mu = Dense(self.latent_dim, )(h)
         z_log_var = Dense(self.latent_dim, )(h)
@@ -81,23 +83,23 @@ class VAE:
         # This defines the encoder which takes noise and input and outputs the latent variable z
         self.encoder = Model(inputs=[x_in, e_cond, angle_cond, geo_cond, eps], outputs=z_cond)
         # Build the decoder / Generator
-        deco_l4 = Dense(self.intermediate_dim4, input_dim=(self.latent_dim + 4),
-                        activation=self.activation, kernel_initializer=self.kernel_initializer,
-                        bias_initializer=self.bias_initializer)
+        deco_l4 = Dense(self._intermediate_dim4, input_dim=(self.latent_dim + 4),
+                        activation=self._activation, kernel_initializer=self._kernel_initializer,
+                        bias_initializer=self._bias_initializer)
         deco_l4_bn = BatchNormalization()
-        deco_l3 = Dense(self.intermediate_dim3, input_dim=self.intermediate_dim4,
-                        activation=self.activation, kernel_initializer=self.kernel_initializer,
-                        bias_initializer=self.bias_initializer)
+        deco_l3 = Dense(self._intermediate_dim3, input_dim=self._intermediate_dim4,
+                        activation=self._activation, kernel_initializer=self._kernel_initializer,
+                        bias_initializer=self._bias_initializer)
         deco_l3_bn = BatchNormalization()
-        deco_l2 = Dense(self.intermediate_dim2, input_dim=self.intermediate_dim3,
-                        activation=self.activation, kernel_initializer=self.kernel_initializer,
-                        bias_initializer=self.bias_initializer)
+        deco_l2 = Dense(self._intermediate_dim2, input_dim=self._intermediate_dim3,
+                        activation=self._activation, kernel_initializer=self._kernel_initializer,
+                        bias_initializer=self._bias_initializer)
         deco_l2_bn = BatchNormalization()
-        deco_l1 = Dense(self.intermediate_dim1, input_dim=self.intermediate_dim2,
-                        activation=self.activation, kernel_initializer=self.kernel_initializer,
-                        bias_initializer=self.bias_initializer)
+        deco_l1 = Dense(self._intermediate_dim1, input_dim=self._intermediate_dim2,
+                        activation=self._activation, kernel_initializer=self._kernel_initializer,
+                        bias_initializer=self._bias_initializer)
         deco_l1_bn = BatchNormalization()
-        x_reco = Dense(self.original_dim, activation=self.out_activation)
+        x_reco = Dense(self._original_dim, activation=self._out_activation)
         z_deco_input = Input(shape=(self.latent_dim + 4,))
         x_reco_deco = x_reco(
             (deco_l1_bn(deco_l1(deco_l2_bn(deco_l2(deco_l3_bn(deco_l3(deco_l4_bn(deco_l4(z_deco_input))))))))))
@@ -107,33 +109,33 @@ class VAE:
 
         # This defines the reconstruction loss of the VAE model
         def _reconstruction_loss(g4_event, vae_event):
-            return k.mean(self.original_dim * k.sum(metrics.binary_crossentropy(g4_event, vae_event)))
+            return k.mean(self._original_dim * k.sum(metrics.binary_crossentropy(g4_event, vae_event)))
 
         # This defines the VAE model (encoder and decoder)
         self.vae = Model(inputs=[x_in, e_cond, angle_cond, geo_cond, eps],
                          outputs=[self.decoder(self.encoder([x_in, e_cond, angle_cond, geo_cond, eps]))])
-        self.vae.compile(optimizer=self.optimizer, loss=[_reconstruction_loss])
+        self.vae.compile(optimizer=self._optimizer, loss=[_reconstruction_loss])
 
     # Training function
     def train(self, train_set, e_cond, angle_cond, geo_cond, verbose=True):
         # If the early stopping flag is on then stop the training when a monitored metric (validation) has stopped
         # improving after (patience) number of epochs
-        if self.early_stop:
+        if self._early_stop:
             c_p = EarlyStopping(monitor="val_loss", min_delta=0.01, patience=5, verbose=1)
         # If the early stopping flag is off then run the training for the number of epochs and save the model
-        # every (period) epochs
+        # every (save_freq) epochs
         else:
-            c_p = ModelCheckpoint(f"{self.checkpoint_dir}VAE-{{epoch:02d}}.h5", monitor="val_loss",
+            c_p = ModelCheckpoint(f"{self._checkpoint_dir}VAE-{{epoch:02d}}.h5", monitor="val_loss",
                                   verbose=0, save_best_only=False, save_weights_only=False,
                                   mode="min",
-                                  save_freq=100)  # the model will be saved every 100 epochs
+                                  save_freq=self._save_freq)
         noise = numpy.random.normal(0, 1, size=(train_set.shape[0], self.latent_dim))
         history = self.vae.fit([train_set, e_cond, angle_cond, geo_cond, noise], [train_set],
                                shuffle=True,
-                               epochs=self.epochs,
+                               epochs=self._epochs,
                                verbose=verbose,
-                               validation_split=self.validation_split,
-                               batch_size=self.batch_size,
+                               validation_split=self._validation_split,
+                               batch_size=self._batch_size,
                                callbacks=[c_p]
                                )
         return history

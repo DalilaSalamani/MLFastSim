@@ -1,4 +1,4 @@
-from typing import Tuple, Dict, Any, List, Type
+from typing import Tuple, Dict, Any, List
 
 import optuna
 import tensorflow as tf
@@ -6,27 +6,24 @@ from optuna import Trial
 from optuna.trial import TrialState
 
 from constants import LR, BATCH_SIZE, ORIGINAL_DIM, INTERMEDIATE_DIM1, INTERMEDIATE_DIM2, INTERMEDIATE_DIM3, \
-    INTERMEDIATE_DIM4, EPOCHS, ACTIVATION, OUT_ACTIVATION, VALIDATION_SPLIT, CHECKPOINT_DIR, EARLY_STOP, OPTIMIZER, \
-    KERNEL_INITIALIZER, BIAS_INITIALIZER, N_TRIALS, LATENT_DIM
+    INTERMEDIATE_DIM4, EPOCHS, ACTIVATION, OUT_ACTIVATION, VALIDATION_SPLIT, CHECKPOINT_DIR, OPTIMIZER, \
+    KERNEL_INITIALIZER, BIAS_INITIALIZER, N_TRIALS, LATENT_DIM, SAVE_FREQ
 from model import VAE
 from preprocess import preprocess
 
 
 class Optimizer:
-    """ Optimizer which looks for the best hyperparameters of the given model (by the day of 08/07/2022 VAE is
-    only supported).
+    """ Optimizer which looks for the best hyperparameters of a Variational Autoencoder specified in model.py.
 
     Attributes:
-        _model_type_to_be_optimized: Type of model whose hyperparameter will be optimized.
         _discrete_parameters: A dictionary of hyperparameters taking discrete values in the range [low, high].
         _continuous_parameters: A dictionary of hyperparameters taking continuous values in the range [low, high].
         _categorical_parameters: A dictionary of hyperparameters taking values specified by the list of them.
 
     """
 
-    def __init__(self, model_type_to_be_optimized: Type, discrete_parameters: Dict[str, Tuple[int, int]],
+    def __init__(self, discrete_parameters: Dict[str, Tuple[int, int]],
                  continuous_parameters: Dict[str, Tuple[float, float]], categorical_parameters: Dict[str, List[Any]]):
-        self._model_type_to_be_optimized = model_type_to_be_optimized
         self._discrete_parameters = discrete_parameters
         self._continuous_parameters = continuous_parameters
         self._categorical_parameters = categorical_parameters
@@ -111,23 +108,24 @@ class Optimizer:
         else:
             bias_initializer = BIAS_INITIALIZER
 
-        model = self._model_type_to_be_optimized(batch_size=BATCH_SIZE,
-                                                 original_dim=original_dim,
-                                                 intermediate_dim1=intermediate_dim1,
-                                                 intermediate_dim2=intermediate_dim2,
-                                                 intermediate_dim3=intermediate_dim3,
-                                                 intermediate_dim4=intermediate_dim4,
-                                                 latent_dim=latent_dim,
-                                                 epochs=EPOCHS,
-                                                 lr=lr,
-                                                 activation=activation,
-                                                 out_activation=out_activation,
-                                                 validation_split=VALIDATION_SPLIT,
-                                                 optimizer=optimizer,
-                                                 kernel_initializer=kernel_initializer,
-                                                 bias_initializer=bias_initializer,
-                                                 early_stop=True,
-                                                 checkpoint_dir=CHECKPOINT_DIR)
+        model = VAE(batch_size=BATCH_SIZE,
+                    original_dim=original_dim,
+                    intermediate_dim1=intermediate_dim1,
+                    intermediate_dim2=intermediate_dim2,
+                    intermediate_dim3=intermediate_dim3,
+                    intermediate_dim4=intermediate_dim4,
+                    latent_dim=latent_dim,
+                    epochs=EPOCHS,
+                    lr=lr,
+                    activation=activation,
+                    out_activation=out_activation,
+                    validation_split=VALIDATION_SPLIT,
+                    optimizer=optimizer,
+                    kernel_initializer=kernel_initializer,
+                    bias_initializer=bias_initializer,
+                    early_stop=True,
+                    checkpoint_dir=CHECKPOINT_DIR,
+                    save_freq=SAVE_FREQ)
         return model
 
     def _objective(self, trial: Trial) -> float:
@@ -154,7 +152,7 @@ class Optimizer:
                               )
 
         # Return validation loss (currently it is treated as an objective goal).
-        validation_loss_history = history.history["loss"]
+        validation_loss_history = history.history["val_loss"]
         final_validation_loss = validation_loss_history[-1]
         return final_validation_loss
 

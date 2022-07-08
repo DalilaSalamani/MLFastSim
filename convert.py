@@ -8,7 +8,8 @@ import sys
 
 import keras2onnx
 
-from instantiate_model import *
+from constants import CHECKPOINT_DIR
+from instantiate_model import instantiate
 
 """
     epoch: epoch of the saved checkpoint model
@@ -28,12 +29,10 @@ def main(argv):
     # Parse commandline arguments
     args = parse_args(argv)
     epoch = args.epoch
-    # Get list of common variables
-    variables = Configure()
-    # Instantiate and load a saved model 
+    # Instantiate and load a saved model
     vae = instantiate()
     # Load the saved weights
-    vae.vae.load_weights("%sVAE-%s.h5" % (variables.checkpoint_dir, epoch))
+    vae.vae.load_weights(f"{CHECKPOINT_DIR}VAE-{epoch}.h5")
 
     # 2. Convert the model to ONNX format
     # Create the Keras model and convert it into an ONNX model

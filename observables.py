@@ -6,18 +6,15 @@ defines a set of shower observables
 import matplotlib.pyplot as plt
 import numpy as np
 
-from configure import Configure
+from constants import N_CELLS_Z
 
 plt.rcParams.update({"font.size": 22})
-
-# Get list of common variables
-variables = Configure()
 
 
 def prepare_customizable_profile(g4, vae, energy_particle, angle_particle, geometry, y_log_scale):
     fig, axes = plt.subplots(2, 1, figsize=(15, 10), clear=True, sharex="all")
-    axes[0].scatter(np.arange(variables.nCells_z), g4, label="FullSim", alpha=0.4)
-    axes[0].scatter(np.arange(variables.nCells_z), vae, label="MLSim", alpha=0.4)
+    axes[0].scatter(np.arange(N_CELLS_Z), g4, label="FullSim", alpha=0.4)
+    axes[0].scatter(np.arange(N_CELLS_Z), vae, label="MLSim", alpha=0.4)
     if y_log_scale:
         axes[0].set_yscale("log")
     axes[0].legend(loc="upper right")

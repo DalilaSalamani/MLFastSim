@@ -7,7 +7,7 @@ from optuna.trial import TrialState
 
 from constants import LR, BATCH_SIZE, ORIGINAL_DIM, INTERMEDIATE_DIM1, INTERMEDIATE_DIM2, INTERMEDIATE_DIM3, \
     INTERMEDIATE_DIM4, EPOCHS, ACTIVATION, OUT_ACTIVATION, VALIDATION_SPLIT, CHECKPOINT_DIR, EARLY_STOP, OPTIMIZER, \
-    KERNEL_INITIALIZER, BIAS_INITIALIZER, N_TRIALS
+    KERNEL_INITIALIZER, BIAS_INITIALIZER, N_TRIALS, LATENT_DIM
 from model import VAE
 from preprocess import preprocess
 
@@ -78,7 +78,7 @@ class Optimizer:
                                            self._discrete_parameters["latent_dim"][0],
                                            self._discrete_parameters["latent_dim"][1])
         else:
-            latent_dim = INTERMEDIATE_DIM1
+            latent_dim = LATENT_DIM
 
         # Continuous parameters
         if "lr" in self._continuous_parameters.keys():

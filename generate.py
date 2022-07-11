@@ -6,7 +6,8 @@ import argparse
 
 import numpy as np
 
-from instantiate_model import *
+from constants import CHECKPOINT_DIR, GEN_DIR
+from instantiate_model import instantiate
 from preprocess import get_condition_arrays
 
 """
@@ -38,14 +39,12 @@ def main():
     geometry = args.geometry
     nb_events = args.nbEvents
     epoch = args.epoch
-    # Get list of common variables
-    variables = Configure()
     # 1. Get condition values
     cond_e, cond_angle, cond_geo = get_condition_arrays(geometry, energy_particle, nb_events)
     # 2. Load a saved model
     vae = instantiate()
     # Load the saved weights
-    vae.vae.load_weights(f"{variables.checkpoint_dir}VAE-{epoch}.h5")
+    vae.vae.load_weights(f"{CHECKPOINT_DIR}VAE-{epoch}.h5")
     # The generator is defined as the decoder part only
     generator = vae.decoder
     # 3. Generate showers using the VAE model by sampling from the prior (normal distribution) in d dimension
@@ -55,7 +54,7 @@ def main():
     generated_events = (generator.predict(z)) * (energy_particle * 1000)
     # 4. Save the generated showers
     np.savetxt(
-        f"{variables.gen_dir}VAE_Generated_Geo_{geometry}_E_{energy_particle}_Angle_{angle_particle}.txt",
+        f"{GEN_DIR}VAE_Generated_Geo_{geometry}_E_{energy_particle}_Angle_{angle_particle}.txt",
         generated_events)
 
 

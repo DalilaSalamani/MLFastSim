@@ -5,6 +5,7 @@ creates validation plots using shower observables
 
 import argparse
 
+from constants import VALID_DIR, INIT_DIR, GEN_DIR, N_CELLS_PHI, N_CELLS_R
 from observables import *
 from preprocess import load_showers
 
@@ -34,23 +35,23 @@ def main():
     geometry = args.geometry
     # 1. Full simulation data loading
     # Load energy of showers from a single geometry, energy and angle
-    e_layer_g4 = load_showers(variables.init_dir, geometry, energy_particle, angle_particle)
-    valid_dir = variables.valid_dir
+    e_layer_g4 = load_showers(INIT_DIR, geometry, energy_particle, angle_particle)
+    valid_dir = VALID_DIR
     # 2. Fast simulation data loading, scaling to original energy range & reshaping
     vae_energies = np.loadtxt(
-        f"{variables.gen_dir}VAE_Generated_Geo_{geometry}_E_{energy_particle}_Angle_{angle_particle}.txt") * (
+        f"{GEN_DIR}VAE_Generated_Geo_{geometry}_E_{energy_particle}_Angle_{angle_particle}.txt") * (
                            energy_particle * 1000)
     # Reshape the events into 3D
-    e_layer_vae = vae_energies.reshape(len(vae_energies), variables.nCells_r, variables.nCells_phi, variables.nCells_z)
+    e_layer_vae = vae_energies.reshape(len(vae_energies), N_CELLS_R, N_CELLS_PHI, N_CELLS_Z)
     # 3. Plot observables
     lp_g4 = []
     lp_vae = []
     tp_g4 = []
     tp_vae = []
-    for i in range(variables.nCells_z):
+    for i in range(N_CELLS_Z):
         lp_g4.append(np.mean(np.array([np.sum(i) for i in e_layer_g4[:, :, :, i]])))
         lp_vae.append(np.mean(np.array([np.sum(i) for i in e_layer_vae[:, :, :, i]])))
-    for i in range(variables.nCells_r):
+    for i in range(N_CELLS_R):
         tp_g4.append(np.mean(np.array([np.sum(i) for i in e_layer_g4[:, i, :, :]])))
         tp_vae.append(np.mean(np.array([np.sum(i) for i in e_layer_vae[:, i, :, :]])))
     longitudinal_profile(lp_g4, lp_vae, energy_particle, angle_particle, geometry, valid_dir)

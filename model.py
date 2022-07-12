@@ -12,8 +12,12 @@ from tensorflow.keras.layers import Input, Dense, Lambda, Layer, Multiply, Add, 
 from tensorflow.keras.models import Model
 from tensorflow.python.keras.optimizer_v2.optimizer_v2 import OptimizerV2
 
-
 # KL divergence computation
+from constants import ORIGINAL_DIM, LATENT_DIM, BATCH_SIZE, INTERMEDIATE_DIM1, INTERMEDIATE_DIM2, INTERMEDIATE_DIM3, \
+    INTERMEDIATE_DIM4, LR, EPOCHS, ACTIVATION, OUT_ACTIVATION, VALIDATION_SPLIT, OPTIMIZER, KERNEL_INITIALIZER, \
+    BIAS_INITIALIZER, CHECKPOINT_DIR, EARLY_STOP, SAVE_FREQ
+
+
 class KLDivergenceLayer(Layer):
     def __init__(self, *args, **kwargs):
         self.is_placeholder = True
@@ -27,11 +31,15 @@ class KLDivergenceLayer(Layer):
 
 
 class VAE:
-    def __init__(self, original_dim: int, latent_dim: int, batch_size: int, intermediate_dim1: int,
-                 intermediate_dim2: int, intermediate_dim3: int, intermediate_dim4: int, lr: float, epochs: int,
-                 activation: Layer, out_activation: str, validation_split: float, optimizer: OptimizerV2,
-                 kernel_initializer: str, bias_initializer: str, checkpoint_dir: str,
-                 early_stop: bool, save_freq: int):
+    def __init__(self, original_dim: int = ORIGINAL_DIM, latent_dim: int = LATENT_DIM, batch_size: int = BATCH_SIZE,
+                 intermediate_dim1: int = INTERMEDIATE_DIM1,
+                 intermediate_dim2: int = INTERMEDIATE_DIM2, intermediate_dim3: int = INTERMEDIATE_DIM3,
+                 intermediate_dim4: int = INTERMEDIATE_DIM4, lr: float = LR, epochs: int = EPOCHS,
+                 activation: Layer = ACTIVATION, out_activation: str = OUT_ACTIVATION,
+                 validation_split: float = VALIDATION_SPLIT, optimizer: OptimizerV2 = OPTIMIZER,
+                 kernel_initializer: str = KERNEL_INITIALIZER, bias_initializer: str = BIAS_INITIALIZER,
+                 checkpoint_dir: str = CHECKPOINT_DIR,
+                 early_stop: bool = EARLY_STOP, save_freq: int = SAVE_FREQ):
         self._original_dim = original_dim
         self.latent_dim = latent_dim
         self._batch_size = batch_size

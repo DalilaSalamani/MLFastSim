@@ -13,6 +13,9 @@ N_CELLS_Z = 45
 # Segmentation in the r,phi direction.
 N_CELLS_R = 18
 N_CELLS_PHI = 50
+# Cell size in the r and z directions 
+SIZE_R = 2.325
+SIZE_Z = 3.4
 
 # Minimum and maximum primary particle energy to consider for training in GeV units.
 MIN_ENERGY = 1

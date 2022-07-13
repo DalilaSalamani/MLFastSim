@@ -2,7 +2,7 @@ import os
 from argparse import ArgumentParser
 
 import tensorflow as tf
-from utils.constants import MAX_GPU_MEMORY_ALLOCATION, GPU_ID
+from core.constants import MAX_GPU_MEMORY_ALLOCATION, GPU_ID
 
 # Hyperparemeters to be optimized.
 from utils.hyperparameter_tuner import HyperparameterTuner

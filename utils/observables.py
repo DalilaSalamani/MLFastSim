@@ -6,7 +6,7 @@ defines a set of shower observables
 import matplotlib.pyplot as plt
 import numpy as np
 
-from constants import N_CELLS_Z, N_CELLS_R, SIZE_Z, SIZE_R
+from core.constants import N_CELLS_Z, N_CELLS_R, SIZE_Z, SIZE_R
 
 plt.rcParams.update({"font.size": 22})
 

@@ -6,7 +6,7 @@ from tensorflow.keras.layers import BatchNormalization
 from tensorflow.keras.layers import Input, Dense, Lambda, Layer, Multiply, Add, concatenate
 from tensorflow.keras.models import Model
 
-from utils.constants import ORIGINAL_DIM, LATENT_DIM, BATCH_SIZE, INTERMEDIATE_DIM1, INTERMEDIATE_DIM3, \
+from core.constants import ORIGINAL_DIM, LATENT_DIM, BATCH_SIZE, INTERMEDIATE_DIM1, INTERMEDIATE_DIM3, \
     INTERMEDIATE_DIM2, EPOCHS, LEARNING_RATE, INTERMEDIATE_DIM4, ACTIVATION, OUT_ACTIVATION, OPTIMIZER_TYPE, \
     VALIDATION_SPLIT, KERNEL_INITIALIZER, CHECKPOINT_DIR, EARLY_STOP, BIAS_INITIALIZER, SAVE_FREQ
 

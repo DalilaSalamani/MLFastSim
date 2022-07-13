@@ -5,7 +5,7 @@ creates validation plots using shower observables
 
 import argparse
 
-from utils.constants import VALID_DIR, INIT_DIR, GEN_DIR, N_CELLS_PHI
+from core.constants import VALID_DIR, INIT_DIR, GEN_DIR, N_CELLS_PHI
 from utils.observables import *
 from preprocess import load_showers
 

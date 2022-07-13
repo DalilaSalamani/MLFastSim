@@ -5,7 +5,7 @@ creates necessary folders
 
 import os
 
-from utils.constants import INIT_DIR, CHECKPOINT_DIR, CONV_DIR, VALID_DIR, GEN_DIR
+from core.constants import INIT_DIR, CHECKPOINT_DIR, CONV_DIR, VALID_DIR, GEN_DIR
 
 for folder in [INIT_DIR,  # Directory to load the full simulation dataset
                CHECKPOINT_DIR,  # Directory to save VAE checkpoints

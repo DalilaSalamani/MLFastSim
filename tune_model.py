@@ -4,9 +4,10 @@ from argparse import ArgumentParser
 import tensorflow as tf
 
 from constants import MAX_GPU_MEMORY_ALLOCATION, GPU_ID
-from optimizer import Optimizer
 
 # Hyperparemeters to be optimized.
+from hyperparameter_tuner import HyperparameterTuner
+
 discrete_parameters = {"intermediate_dim1": (50, 200), "intermediate_dim2": (20, 100), "intermediate_dim3": (10, 50),
                        "intermediate_dim4": (5, 20), "latent_dim": (3, 15)}
 continuous_parameters = {"lr": (0.0001, 0.01)}
@@ -31,7 +32,7 @@ def main():
     gpu_id = args.gpu_id
 
     if storage is None:
-        optimizer = Optimizer(discrete_parameters, continuous_parameters, categorical_parameters)
+        hyperparameter_tuner = HyperparameterTuner(discrete_parameters, continuous_parameters, categorical_parameters)
     else:
         os.environ["CUDA_VISIBLE_DEVICES"] = f"{gpu_id}"
 
@@ -47,11 +48,11 @@ def main():
                 # Virtual devices must be set before GPUs have been initialized
                 print(e)
 
-        optimizer = Optimizer(discrete_parameters, continuous_parameters, categorical_parameters, storage, study_name)
+        hyperparameter_tuner = HyperparameterTuner(discrete_parameters, continuous_parameters, categorical_parameters,
+                                                   storage, study_name)
 
-    print("blabla")
-    # Run main optimization function.
-    optimizer.optimize()
+    # Run main tuning function.
+    hyperparameter_tuner.tune()
 
     # Watch out! This script neither deletes the study in DB nor deletes the database itself. If you are using
     # parallelized optimization, then you should care about deleting study in the database by yourself.

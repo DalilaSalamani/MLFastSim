@@ -2,10 +2,8 @@
 ** preprocess **
 defines the data loading and preprocessing functions 
 """
-
 import h5py
 import numpy as np
-
 # preprocess function loads the data and returns the array of the shower energies and the condition arrays
 from constants import INIT_DIR, ORIGINAL_DIM, MAX_ENERGY, MAX_ANGLE, MIN_ANGLE, MIN_ENERGY
 
@@ -16,34 +14,33 @@ def preprocess():
     cond_angle_train = []
     cond_geo_train = []
     # This example is trained using 2 detector geometries
-    # for geo in ["SiW", "SciPb"]:
-    geo = "SiW"
-    dir_geo = INIT_DIR + geo + "/"
-    # loop over the angles in a step of 10
-    # for angle_particle in range(MIN_ANGLE, MAX_ANGLE + 10, 10):
-    angle_particle = 90
-    f_name = f"{geo}_angle_{angle_particle}.h5"
-    f_name = dir_geo + f_name
-    # read the HDF5 file
-    h5 = h5py.File(f_name, "r")
-    # loop over energies from min_energy to max_energy
-    energy_particle = 1024
-    # while energy_particle <= MAX_ENERGY:
-    # scale the energy of each cell to the energy of the primary particle (in MeV units)
-    events = np.array(h5[f"{energy_particle}"]) / (energy_particle * 1000)
-    energies_train.append(events.reshape(len(events), ORIGINAL_DIM))
-    # build the energy and angle condition vectors
-    cond_e_train.append([energy_particle / MAX_ENERGY] * len(events))
-    cond_angle_train.append([angle_particle / MAX_ANGLE] * len(events))
-    # build the geometry condition vector (1 hot encoding vector)
-    if geo == "SiW":
-        cond_geo_train.append([[0, 1]] * len(events))
-    if geo == "SciPb":
-        cond_geo_train.append([[1, 0]] * len(events))
-    # energy_particle *= 2
+    for geo in ["SiW", "SciPb"]:
+        dir_geo = INIT_DIR + geo + "/"
+        # loop over the angles in a step of 10
+        for angle_particle in range(MIN_ANGLE, MAX_ANGLE + 10, 10):
+            f_name = f"{geo}_angle_{angle_particle}.h5"
+            f_name = dir_geo + f_name
+            # read the HDF5 file
+            h5 = h5py.File(f_name, "r")
+            # loop over energies from min_energy to max_energy
+            energy_particle = MIN_ENERGY
+            while energy_particle <= MAX_ENERGY:
+                # scale the energy of each cell to the energy of the primary particle (in MeV units)
+                events = np.array(h5[f"{energy_particle}"]) / (energy_particle * 1000)
+                energies_train.append(events.reshape(len(events), ORIGINAL_DIM))
+                # build the energy and angle condition vectors
+                cond_e_train.append([energy_particle / MAX_ENERGY] * len(events))
+                cond_angle_train.append([angle_particle / MAX_ANGLE] * len(events))
+                # build the geometry condition vector (1 hot encoding vector)
+                if geo == "SiW":
+                    cond_geo_train.append([[0, 1]] * len(events))
+                if geo == "SciPb":
+                    cond_geo_train.append([[1, 0]] * len(events))
+                energy_particle *= 2
     # return numpy arrays
     energies_train = np.concatenate(energies_train)
     cond_e_train = np.concatenate(cond_e_train)
+
     cond_angle_train = np.concatenate(cond_angle_train)
     cond_geo_train = np.concatenate(cond_geo_train)
     return energies_train, cond_e_train, cond_angle_train, cond_geo_train
@@ -74,7 +71,6 @@ def get_condition_arrays(geo, energy_particle, nb_events):
     - geo : name of the calorimeter geometry (eg: SiW, SciPb)
     - energy_particle : energy of the primary particle in GeV units
     - angle_particle : angle of the primary particle in degrees
-
 """
 
 

@@ -2,7 +2,7 @@
 ** train **
 performs the training
 """
-from instantiate_model import instantiate
+from model import VAE
 from preprocess import preprocess
 
 # 1. Data loading/preprocessing
@@ -12,7 +12,7 @@ from preprocess import preprocess
 energies_train, cond_e_train, cond_angle_train, cond_geo_train = preprocess()
 
 # 2. Model architecture
-vae = instantiate()
+vae = VAE()
 
 # 3. Model training
 history = vae.train(energies_train,

@@ -9,7 +9,7 @@ from core.constants import LEARNING_RATE, BATCH_SIZE, ORIGINAL_DIM, INTERMEDIATE
     INTERMEDIATE_DIM3, INTERMEDIATE_DIM4, EPOCHS, ACTIVATION, OUT_ACTIVATION, VALIDATION_SPLIT, CHECKPOINT_DIR, \
     OPTIMIZER_TYPE, KERNEL_INITIALIZER, BIAS_INITIALIZER, N_TRIALS, LATENT_DIM, SAVE_FREQ
 from core.model import VAE
-from preprocess import preprocess
+from utils.preprocess import preprocess
 
 
 class HyperparameterTuner:

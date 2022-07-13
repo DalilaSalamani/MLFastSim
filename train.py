@@ -1,4 +1,4 @@
-from preprocess import preprocess
+from utils.preprocess import preprocess
 from core.model import VAE
 
 # 1. Data loading/preprocessing

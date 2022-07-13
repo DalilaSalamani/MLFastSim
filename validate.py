@@ -7,7 +7,7 @@ import argparse
 
 from core.constants import VALID_DIR, INIT_DIR, GEN_DIR, N_CELLS_PHI
 from utils.observables import *
-from preprocess import load_showers
+from utils.preprocess import load_showers
 
 # parse_args function
 """

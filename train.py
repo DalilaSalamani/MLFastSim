@@ -1,9 +1,5 @@
-"""
-** train **
-performs the training
-"""
-from model import VAE
 from preprocess import preprocess
+from utils.model import VAE
 
 # 1. Data loading/preprocessing
 

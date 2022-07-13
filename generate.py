@@ -6,9 +6,9 @@ import argparse
 
 import numpy as np
 
-from constants import CHECKPOINT_DIR, GEN_DIR
-from model import VAE
 from preprocess import get_condition_arrays
+from utils.constants import CHECKPOINT_DIR, GEN_DIR
+from utils.model import VAE
 
 """
     - geometry : name of the calorimeter geometry (eg: SiW, SciPb)

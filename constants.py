@@ -2,9 +2,8 @@
 ** constants **
 defines the set of common variables
 """
+from tensorflow.keras.optimizers import Adam
 from tensorflow.python.keras.layers import LeakyReLU
-
-from model import OptimizerType
 
 """
 Experiment constants.
@@ -50,13 +49,13 @@ INTERMEDIATE_DIM2 = 50
 INTERMEDIATE_DIM3 = 20
 INTERMEDIATE_DIM4 = 10 + 4
 LATENT_DIM = 10
-EPOCHS = 20
-LEARNING_RATE = 0.001
+EPOCHS = 10
+LR = 0.001
 SAVE_FREQ = 100
 ACTIVATION = LeakyReLU()
 OUT_ACTIVATION = "sigmoid"
 VALIDATION_SPLIT = 0.05
-OPTIMIZER_TYPE = OptimizerType.ADAM
+OPTIMIZER = Adam()
 KERNEL_INITIALIZER = "RandomNormal"
 BIAS_INITIALIZER = "Zeros"
 EARLY_STOP = False

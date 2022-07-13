@@ -5,15 +5,15 @@ from optuna import Trial, create_study, get_all_study_summaries, load_study
 from optuna.pruners import MedianPruner
 from optuna.trial import TrialState
 
-from constants import LR, BATCH_SIZE, ORIGINAL_DIM, INTERMEDIATE_DIM1, INTERMEDIATE_DIM2, INTERMEDIATE_DIM3, \
-    INTERMEDIATE_DIM4, EPOCHS, ACTIVATION, OUT_ACTIVATION, VALIDATION_SPLIT, CHECKPOINT_DIR, OPTIMIZER, \
+from constants import LEARNING_RATE, BATCH_SIZE, ORIGINAL_DIM, INTERMEDIATE_DIM1, INTERMEDIATE_DIM2, INTERMEDIATE_DIM3, \
+    INTERMEDIATE_DIM4, EPOCHS, ACTIVATION, OUT_ACTIVATION, VALIDATION_SPLIT, CHECKPOINT_DIR, OPTIMIZER_TYPE, \
     KERNEL_INITIALIZER, BIAS_INITIALIZER, N_TRIALS, LATENT_DIM, SAVE_FREQ
 from model import VAE
 from preprocess import preprocess
 
 
-class Optimizer:
-    """ Optimizer which looks for the best hyperparameters of a Variational Autoencoder specified in model.py.
+class HyperparameterTuner:
+    """Tuner which looks for the best hyperparameters of a Variational Autoencoder specified in model.py.
 
     Attributes:
         _discrete_parameters: A dictionary of hyperparameters taking discrete values in the range [low, high].
@@ -57,36 +57,42 @@ class Optimizer:
         Returns:
             Variational Autoencoder (VAE)
         """
+
         # Discrete parameters
         if "original_dim" in self._discrete_parameters.keys():
             original_dim = trial.suggest_int("original_dim", self._discrete_parameters["original_dim"][0],
                                              self._discrete_parameters["original_dim"][1])
         else:
             original_dim = ORIGINAL_DIM
+
         if "intermediate_dim1" in self._discrete_parameters.keys():
             intermediate_dim1 = trial.suggest_int("intermediate_dim1",
                                                   self._discrete_parameters["intermediate_dim1"][0],
                                                   self._discrete_parameters["intermediate_dim1"][1])
         else:
             intermediate_dim1 = INTERMEDIATE_DIM1
+
         if "intermediate_dim2" in self._discrete_parameters.keys():
             intermediate_dim2 = trial.suggest_int("intermediate_dim2",
                                                   self._discrete_parameters["intermediate_dim2"][0],
                                                   self._discrete_parameters["intermediate_dim2"][1])
         else:
             intermediate_dim2 = INTERMEDIATE_DIM2
+
         if "intermediate_dim3" in self._discrete_parameters.keys():
             intermediate_dim3 = trial.suggest_int("intermediate_dim3",
                                                   self._discrete_parameters["intermediate_dim3"][0],
                                                   self._discrete_parameters["intermediate_dim3"][1])
         else:
             intermediate_dim3 = INTERMEDIATE_DIM3
+
         if "intermediate_dim4" in self._discrete_parameters.keys():
             intermediate_dim4 = trial.suggest_int("intermediate_dim4",
                                                   self._discrete_parameters["intermediate_dim4"][0],
                                                   self._discrete_parameters["intermediate_dim4"][1])
         else:
             intermediate_dim4 = INTERMEDIATE_DIM4
+
         if "latent_dim" in self._discrete_parameters.keys():
             latent_dim = trial.suggest_int("latent_dim",
                                            self._discrete_parameters["latent_dim"][0],
@@ -95,42 +101,59 @@ class Optimizer:
             latent_dim = LATENT_DIM
 
         # Continuous parameters
-        if "lr" in self._continuous_parameters.keys():
-            lr = trial.suggest_float("lr", low=self._continuous_parameters["lr"][0],
-                                     high=self._continuous_parameters["lr"][1])
+        if "learning_rate" in self._continuous_parameters.keys():
+            learning_rate = trial.suggest_float("learning_rate", low=self._continuous_parameters["learning_rate"][0],
+                                                high=self._continuous_parameters["learning_rate"][1])
         else:
-            lr = LR
+            learning_rate = LEARNING_RATE
 
         # Categorical parameters
         if "activation" in self._categorical_parameters.keys():
             activation = trial.suggest_categorical("activation", self._categorical_parameters["activation"])
         else:
             activation = ACTIVATION
+
         if "out_activation" in self._categorical_parameters.keys():
             out_activation = trial.suggest_categorical("out_activation", self._categorical_parameters["out_activation"])
         else:
             out_activation = OUT_ACTIVATION
-        if "optimizer" in self._categorical_parameters.keys():
-            optimizer = trial.suggest_categorical("optimizer", self._categorical_parameters["optimizer"])
+
+        if "optimizer_type" in self._categorical_parameters.keys():
+            optimizer_type = trial.suggest_categorical("optimizer_type", self._categorical_parameters["optimizer_type"])
         else:
-            optimizer = OPTIMIZER
+            optimizer_type = OPTIMIZER_TYPE
+
         if "kernel_initializer" in self._categorical_parameters.keys():
             kernel_initializer = trial.suggest_categorical("kernel_initializer",
                                                            self._categorical_parameters["kernel_initializer"])
         else:
             kernel_initializer = KERNEL_INITIALIZER
+
         if "bias_initializer" in self._categorical_parameters.keys():
             bias_initializer = trial.suggest_categorical("bias_initializer",
                                                          self._categorical_parameters["bias_initializer"])
         else:
             bias_initializer = BIAS_INITIALIZER
 
-        return VAE(batch_size=BATCH_SIZE, original_dim=original_dim, intermediate_dim1=intermediate_dim1,
-                   intermediate_dim2=intermediate_dim2, intermediate_dim3=intermediate_dim3,
-                   intermediate_dim4=intermediate_dim4, latent_dim=latent_dim, epochs=EPOCHS, lr=lr,
-                   activation=activation, out_activation=out_activation, validation_split=VALIDATION_SPLIT,
-                   optimizer=optimizer, kernel_initializer=kernel_initializer, bias_initializer=bias_initializer,
-                   early_stop=True, checkpoint_dir=CHECKPOINT_DIR, save_freq=SAVE_FREQ)
+        model = VAE(batch_size=BATCH_SIZE,
+                    original_dim=original_dim,
+                    intermediate_dim1=intermediate_dim1,
+                    intermediate_dim2=intermediate_dim2,
+                    intermediate_dim3=intermediate_dim3,
+                    intermediate_dim4=intermediate_dim4,
+                    latent_dim=latent_dim,
+                    epochs=EPOCHS,
+                    learning_rate=learning_rate,
+                    activation=activation,
+                    out_activation=out_activation,
+                    validation_split=VALIDATION_SPLIT,
+                    optimizer_type=optimizer_type,
+                    kernel_initializer=kernel_initializer,
+                    bias_initializer=bias_initializer,
+                    early_stop=True,
+                    checkpoint_dir=CHECKPOINT_DIR,
+                    save_freq=SAVE_FREQ)
+        return model
 
     def _objective(self, trial: Trial) -> float:
         """For a given trial trains the model and returns validation loss.
@@ -141,6 +164,7 @@ class Optimizer:
         Returns:
             One float numer which is a validation loss calculated on 5% unseen before elements of the dataset.
         """
+        
         tf.keras.backend.clear_session()
 
         # Generate the trial model.
@@ -156,15 +180,26 @@ class Optimizer:
         final_validation_loss = validation_loss_history[-1]
         return final_validation_loss
 
-    def optimize(self) -> None:
-        """Main optimization function.
+    def tune(self) -> None:
+        """Main tuning function.
 
+<<<<<<< HEAD:hyperparameter_tuner.py
+        It creates a study, tunes the model and prints detailed information about the best trial (value of the
+        objective function and adjusted parameters).
+        """
+
+        study = optuna.create_study(direction="minimize", pruner=optuna.pruners.MedianPruner())
+        study.optimize(self._objective, n_trials=N_TRIALS)
+        pruned_trials = study.get_trials(deepcopy=False, states=(TrialState.PRUNED,))
+        complete_trials = study.get_trials(deepcopy=False, states=(TrialState.COMPLETE,))
+=======
         Based on a given study, optimizes model and prints detailed information
         about the best trial (value of the objective function and adjusted parameters).
         """
         self._study.optimize(func=self._objective, n_trials=N_TRIALS, gc_after_trial=True)
         pruned_trials = self._study.get_trials(deepcopy=False, states=(TrialState.PRUNED,))
         complete_trials = self._study.get_trials(deepcopy=False, states=(TrialState.COMPLETE,))
+>>>>>>> main:optimizer.py
         print("Study statistics: ")
         print("  Number of finished trials: ", len(self._study.trials))
         print("  Number of pruned trials: ", len(pruned_trials))

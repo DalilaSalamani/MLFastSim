@@ -1,6 +1,4 @@
-from tensorflow.python.keras.layers import LeakyReLU
-
-from model import OptimizerType
+from utils.optimizer import OptimizerType
 
 """
 Experiment constants.
@@ -49,7 +47,7 @@ LATENT_DIM = 10
 EPOCHS = 10
 LEARNING_RATE = 0.001
 SAVE_FREQ = 100
-ACTIVATION = LeakyReLU()
+ACTIVATION = "relu"
 OUT_ACTIVATION = "sigmoid"
 VALIDATION_SPLIT = 0.05
 OPTIMIZER_TYPE = OptimizerType.ADAM

@@ -8,8 +8,8 @@ import sys
 
 import keras2onnx
 
-from constants import CHECKPOINT_DIR
-from model import VAE
+from utils.constants import CHECKPOINT_DIR
+from utils.model import VAE
 
 """
     epoch: epoch of the saved checkpoint model

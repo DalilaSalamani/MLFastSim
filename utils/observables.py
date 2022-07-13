@@ -13,7 +13,7 @@ plt.rcParams.update({"font.size": 22})
 
 def prepare_customizable_profile(g4, vae, energy_particle, angle_particle, geometry, bins, y_log_scale, hist_weight):
     fig, axes = plt.subplots(2, 1, figsize=(15, 10), clear=True, sharex="all")
-    if(hist_weight):
+    if hist_weight:
         axes[0].hist(np.arange(N_CELLS_Z), weights=g4, label="FullSim", bins=bins, alpha=0.4)
         axes[0].hist(np.arange(N_CELLS_Z), weights=vae, label="MLSim", bins=bins, alpha=0.4)
     else:
@@ -32,8 +32,10 @@ def prepare_customizable_profile(g4, vae, energy_particle, angle_particle, geome
 
 # longitudinal_profile function plots the longitudinal profile comparing full and fast simulation data of a single
 # geometry, energy and angle of primary particles
-def longitudinal_profile(g4, vae, energy_particle, angle_particle, geometry, save_dir, y_log_scale=True, hist_weight=True):
-    fig, axes = prepare_customizable_profile(g4, vae, energy_particle, angle_particle, geometry, np.linspace(0,N_CELLS_Z,N_CELLS_Z), y_log_scale)
+def longitudinal_profile(g4, vae, energy_particle, angle_particle, geometry, save_dir, y_log_scale=True,
+                         hist_weight=True):
+    fig, axes = prepare_customizable_profile(g4, vae, energy_particle, angle_particle, geometry,
+                                             np.linspace(0, N_CELLS_Z, N_CELLS_Z), y_log_scale, hist_weight)
     axes[0].set_xlabel("Layer index")
     axes[1].set_xlabel("Layer index")
     plt.savefig(f"{save_dir}LongProf_Geo_{geometry}_E_{energy_particle}_Angle_{angle_particle}.png")
@@ -43,7 +45,8 @@ def longitudinal_profile(g4, vae, energy_particle, angle_particle, geometry, sav
 # lateral_profile function plots the lateral first moment comparing full and fast simulation data of a single geometry,
 # energy and angle of primary particles
 def lateral_profile(g4, vae, energy_particle, angle_particle, geometry, save_dir, y_log_scale=True, hist_weight=True):
-    fig, axes = prepare_customizable_profile(g4, vae, energy_particle, angle_particle, geometry, np.linspace(0,N_CELLS_R-1,N_CELLS_R), y_log_scale)
+    fig, axes = prepare_customizable_profile(g4, vae, energy_particle, angle_particle, geometry,
+                                             np.linspace(0, N_CELLS_R - 1, N_CELLS_R), y_log_scale, hist_weight)
     axes[0].set_xlabel("r index")
     axes[1].set_xlabel("r index")
     plt.savefig(f"{save_dir}LatProf_Geo_{geometry}_E_{energy_particle}_Angle_{angle_particle}.png")
@@ -52,22 +55,27 @@ def lateral_profile(g4, vae, energy_particle, angle_particle, geometry, save_dir
 
 # longitudinal_first_moment function plots the longitudinal profile comparing full and fast simulation data of a single
 # geometry, energy and angle of primary particles
-def longitudinal_first_moment(g4, vae, energy_particle, angle_particle, geometry, save_dir, y_log_scale=True, hist_weight=False):
-    fig, axes = prepare_customizable_profile(g4, vae, energy_particle, angle_particle, geometry, np.linspace(0, 0.4*N_CELLS_Z*SIZE_Z, 128), y_log_scale)
+def longitudinal_first_moment(g4, vae, energy_particle, angle_particle, geometry, save_dir, y_log_scale=True,
+                              hist_weight=False):
+    fig, axes = prepare_customizable_profile(g4, vae, energy_particle, angle_particle, geometry,
+                                             np.linspace(0, 0.4 * N_CELLS_Z * SIZE_Z, 128), y_log_scale, hist_weight)
     axes[0].set_xlabel("$<\lambda>$ (mm)")
     axes[1].set_xlabel("$<\lambda>$ (mm)")
-    plt.savefig(f"{save_dir}LongFirstMoment_Geo_{geometry}_E_{energy_particle}_Angle_{angle_particle}.png")
+    plt.savefig(f"{save_dir}Long_First_Moment_Geo_{geometry}_E_{energy_particle}_Angle_{angle_particle}.png")
     plt.show()
 
 
-# lateral_first_moment function plots the lateral first moment comparing full and fast simulation data of a single geometry,
-# energy and angle of primary particles
-def lateral_first_moment(g4, vae, energy_particle, angle_particle, geometry, save_dir, y_log_scale=True, hist_weight=False):
-    fig, axes = prepare_customizable_profile(g4, vae, energy_particle, angle_particle, geometry, np.linspace(0, 0.75*N_CELLS_R*SIZE_R,128), y_log_scale)
+# lateral_first_moment function plots the lateral first moment comparing full and fast simulation data of a single
+# geometry, energy and angle of primary particles
+def lateral_first_moment(g4, vae, energy_particle, angle_particle, geometry, save_dir, y_log_scale=True,
+                         hist_weight=False):
+    fig, axes = prepare_customizable_profile(g4, vae, energy_particle, angle_particle, geometry,
+                                             np.linspace(0, 0.75 * N_CELLS_R * SIZE_R, 128), y_log_scale, hist_weight)
     axes[0].set_xlabel("$<r>$ (mm)")
     axes[1].set_xlabel("$<r>$ (mm)")
     plt.savefig(f"{save_dir}LatFirstMoment_Geo_{geometry}_E_{energy_particle}_Angle_{angle_particle}.png")
     plt.show()
+
 
 # Total energy distribution comparing full and fast simulation data of a single geometry, energy and angle of primary
 # particles
@@ -81,7 +89,7 @@ def e_tot(g4, vae, energy_particle, angle_particle, geometry, save_dir, y_log_sc
         plt.yscale("log")
     plt.xlabel("Energy [MeV]")
     plt.ylabel("# events")
-    plt.savefig(f"{save_dir}Etot_Geo_{geometry}_E_{energy_particle}_Angle_{angle_particle}.png")
+    plt.savefig(f"{save_dir}E_tot_Geo_{geometry}_E_{energy_particle}_Angle_{angle_particle}.png")
     plt.show()
 
 
@@ -99,7 +107,7 @@ def energy_layer(g4, vae, energy_particle, angle_particle, geometry, save_dir):
             n_vae, bins_vae, _ = ax[i][j].hist(vae_l, histtype="step", label="FastSim", bins=bins, color="red")
             ax[i][j].set_title("Layer %s" % cpt, fontsize=12)
             cpt += 1
-    plt.savefig("%sELayer_Geo_%s_E_%s_Angle_%s.png" % (save_dir, geometry, energy_particle, angle_particle))
+    plt.savefig(f"{save_dir}E_Layer_Geo_{geometry}_E_{energy_particle}_Angle_{angle_particle}.png")
     plt.show()
 
 
@@ -116,6 +124,7 @@ def cell_energy(g4, vae, energy_particle, angle_particle, geometry, save_dir):
                 else:
                     all_log_en.append(0)
         return plt.hist(all_log_en, bins=np.linspace(-4, 1, 1000), facecolor=colour, histtype="step", label=label)
+
     plt.figure(figsize=(12, 8))
     log_energy(g4, "b", "FullSim")
     log_energy(vae, "r", "FastSim")
@@ -126,5 +135,5 @@ def cell_energy(g4, vae, energy_particle, angle_particle, geometry, save_dir):
     plt.ylabel("# entries")
     plt.grid(True)
     plt.legend()
-    plt.savefig("%sCellEDist_Log_Geo_%s_E_%s_Angle_%s.png" % (save_dir, geometry, energy_particle, angle_particle))
+    plt.savefig(f"{save_dir}Cell_E_Dist_Log_Geo_{geometry}_E_{energy_particle}_Angle_{angle_particle}.png")
     plt.show()

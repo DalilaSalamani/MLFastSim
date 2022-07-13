@@ -1,24 +1,23 @@
-from enum import Enum
-
-import numpy
+import numpy as np
 from tensorflow.keras import backend as k
 from tensorflow.keras import metrics
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 from tensorflow.keras.layers import BatchNormalization
 from tensorflow.keras.layers import Input, Dense, Lambda, Layer, Multiply, Add, concatenate
 from tensorflow.keras.models import Model
-from tensorflow.keras.optimizers import Adam, SGD, RMSprop, Adamax, Adagrad, Adadelta, Nadam, Ftrl, Optimizer
+
+from utils.constants import ORIGINAL_DIM, LATENT_DIM, BATCH_SIZE, INTERMEDIATE_DIM1, INTERMEDIATE_DIM3, \
+    INTERMEDIATE_DIM2, EPOCHS, LEARNING_RATE, INTERMEDIATE_DIM4, ACTIVATION, OUT_ACTIVATION, OPTIMIZER_TYPE, \
+    VALIDATION_SPLIT, KERNEL_INITIALIZER, CHECKPOINT_DIR, EARLY_STOP, BIAS_INITIALIZER, SAVE_FREQ
 
 # KL divergence computation
-from constants import ORIGINAL_DIM, LATENT_DIM, BATCH_SIZE, INTERMEDIATE_DIM1, INTERMEDIATE_DIM3, INTERMEDIATE_DIM2, \
-    EPOCHS, LEARNING_RATE, INTERMEDIATE_DIM4, ACTIVATION, OUT_ACTIVATION, OPTIMIZER_TYPE, VALIDATION_SPLIT, \
-    KERNEL_INITIALIZER, CHECKPOINT_DIR, EARLY_STOP, BIAS_INITIALIZER, SAVE_FREQ
+from utils.optimizer import OptimizerFactory, OptimizerType
 
 
-class KLDivergenceLayer(Layer):
+class _KLDivergenceLayer(Layer):
     def __init__(self, *args, **kwargs):
         self.is_placeholder = True
-        super(KLDivergenceLayer, self).__init__(*args, **kwargs)
+        super(_KLDivergenceLayer, self).__init__(*args, **kwargs)
 
     def calc(self, inputs):
         mu, log_var = inputs
@@ -27,64 +26,15 @@ class KLDivergenceLayer(Layer):
         return inputs
 
 
-class OptimizerType(Enum):
-    """ Enum class of various optimizer types.
-    """
-
-    SGD = 0
-    RMSPROP = 1
-    ADAM = 2
-    ADADELTA = 3
-    ADAGRAD = 4
-    ADAMAX = 5
-    NADAM = 6
-    FTRL = 7
-
-
-class OptimizerFactory:
-    """Factory of optimizer like Stochastic Gradient Descent, RMSProp, Adam, etc.
-    """
-
-    @staticmethod
-    def create_optimizer(optimizer_type: OptimizerType, learning_rate: float) -> Optimizer:
-        """For a given type and a learning rate creates an instance of optimizer.
-
-        Args:
-            optimizer_type: a type of optimizer
-            learning_rate: a learning rate that should be passed to an optimizer
-
-        Returns:
-            An instance of optimizer.
-
-        """
-        if optimizer_type == OptimizerType.SGD:
-            return SGD(learning_rate)
-        elif optimizer_type == OptimizerType.RMSPROP:
-            return RMSprop(learning_rate)
-        elif optimizer_type == OptimizerType.ADAM:
-            return Adam(learning_rate)
-        elif optimizer_type == OptimizerType.ADADELTA:
-            return Adadelta(learning_rate)
-        elif optimizer_type == OptimizerType.ADAGRAD:
-            return Adagrad(learning_rate)
-        elif optimizer_type == OptimizerType.ADAMAX:
-            return Adamax(learning_rate)
-        elif optimizer_type == OptimizerType.NADAM:
-            return Nadam(learning_rate)
-        else:
-            # i.e. optimizer_type == OptimizerType.FTRL
-            return Ftrl(learning_rate)
-
-
 class VAE:
     def __init__(self, original_dim: int = ORIGINAL_DIM, latent_dim: int = LATENT_DIM, batch_size: int = BATCH_SIZE,
                  intermediate_dim1: int = INTERMEDIATE_DIM1, intermediate_dim2: int = INTERMEDIATE_DIM2,
-                 intermediate_dim3: int = INTERMEDIATE_DIM3,
-                 intermediate_dim4: int = INTERMEDIATE_DIM4, learning_rate: float = LEARNING_RATE, epochs: int = EPOCHS,
-                 activation: Layer = ACTIVATION, out_activation: str = OUT_ACTIVATION,
-                 validation_split: float = VALIDATION_SPLIT, optimizer_type: OptimizerType = OPTIMIZER_TYPE,
-                 kernel_initializer: str = KERNEL_INITIALIZER, bias_initializer: str = BIAS_INITIALIZER,
-                 checkpoint_dir: str = CHECKPOINT_DIR, early_stop: bool = EARLY_STOP, save_freq: int = SAVE_FREQ):
+                 intermediate_dim3: int = INTERMEDIATE_DIM3, intermediate_dim4: int = INTERMEDIATE_DIM4,
+                 learning_rate: float = LEARNING_RATE, epochs: int = EPOCHS, activation: str = ACTIVATION,
+                 out_activation: str = OUT_ACTIVATION, validation_split: float = VALIDATION_SPLIT,
+                 optimizer_type: OptimizerType = OPTIMIZER_TYPE, kernel_initializer: str = KERNEL_INITIALIZER,
+                 bias_initializer: str = BIAS_INITIALIZER, checkpoint_dir: str = CHECKPOINT_DIR,
+                 early_stop: bool = EARLY_STOP, save_freq: int = SAVE_FREQ):
         self._original_dim = original_dim
         self.latent_dim = latent_dim
         self._batch_size = batch_size
@@ -124,7 +74,7 @@ class VAE:
         z_mu = Dense(self.latent_dim, )(h)
         z_log_var = Dense(self.latent_dim, )(h)
         # compute the KL divergence
-        z_mu, z_log_var = KLDivergenceLayer().calc([z_mu, z_log_var])
+        z_mu, z_log_var = _KLDivergenceLayer().calc([z_mu, z_log_var])
         # Reparameterization trick
         z_sigma = Lambda(lambda t: k.exp(.5 * t))(z_log_var)
         eps = Input(tensor=k.random_normal(shape=(k.shape(x_in)[0], self.latent_dim)))
@@ -180,7 +130,7 @@ class VAE:
                                   verbose=0, save_best_only=False, save_weights_only=False,
                                   mode="min",
                                   save_freq=self._save_freq)
-        noise = numpy.random.normal(0, 1, size=(train_set.shape[0], self.latent_dim))
+        noise = np.random.normal(0, 1, size=(train_set.shape[0], self.latent_dim))
         history = self.vae.fit([train_set, e_cond, angle_cond, geo_cond, noise], [train_set],
                                shuffle=True,
                                epochs=self._epochs,

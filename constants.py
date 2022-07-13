@@ -60,7 +60,7 @@ EARLY_STOP = False
 """
 Optimizer parameters.
 """
-N_TRIALS = 20
+N_TRIALS = 5
 # Maximum allowed memory on one of the GPUs (in GB)
 MAX_GPU_MEMORY_ALLOCATION = 8
 # ID of GPU used in a process

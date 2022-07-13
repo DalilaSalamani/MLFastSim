@@ -5,7 +5,7 @@ defines the data loading and preprocessing functions
 import h5py
 import numpy as np
 # preprocess function loads the data and returns the array of the shower energies and the condition arrays
-from constants import INIT_DIR, ORIGINAL_DIM, MAX_ENERGY, MAX_ANGLE, MIN_ANGLE, MIN_ENERGY
+from core.constants import INIT_DIR, ORIGINAL_DIM, MAX_ENERGY, MAX_ANGLE, MIN_ANGLE, MIN_ENERGY
 
 
 def preprocess():

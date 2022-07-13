@@ -2,6 +2,7 @@
 ** model **
 defines the VAE model class 
 """
+from enum import Enum
 
 import numpy
 from tensorflow.keras import backend as k
@@ -10,7 +11,7 @@ from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 from tensorflow.keras.layers import BatchNormalization
 from tensorflow.keras.layers import Input, Dense, Lambda, Layer, Multiply, Add, concatenate
 from tensorflow.keras.models import Model
-from tensorflow.python.keras.optimizer_v2.optimizer_v2 import OptimizerV2
+from tensorflow.keras.optimizers import Adam, SGD, RMSprop, Adamax, Adagrad, Adadelta, Nadam, Ftrl, Optimizer
 
 # KL divergence computation
 from constants import ORIGINAL_DIM, LATENT_DIM, BATCH_SIZE, INTERMEDIATE_DIM1, INTERMEDIATE_DIM2, INTERMEDIATE_DIM3, \
@@ -30,6 +31,55 @@ class KLDivergenceLayer(Layer):
         return inputs
 
 
+class OptimizerType(Enum):
+    """ Enum class of various optimizer types.
+    """
+
+    SGD = 0
+    RMSPROP = 1
+    ADAM = 2
+    ADADELTA = 3
+    ADAGRAD = 4
+    ADAMAX = 5
+    NADAM = 6
+    FTRL = 7
+
+
+class OptimizerFactory:
+    """Factory of optimizer like Stochastic Gradient Descent, RMSProp, Adam, etc.
+    """
+
+    @staticmethod
+    def create_optimizer(optimizer_type: OptimizerType, learning_rate: float) -> Optimizer:
+        """For a given type and a learning rate creates an instance of optimizer.
+
+        Args:
+            optimizer_type: a type of optimizer
+            learning_rate: a learning rate that should be passed to an optimizer
+
+        Returns:
+            An instance of optimizer.
+
+        """
+        if optimizer_type == OptimizerType.SGD:
+            return SGD(learning_rate)
+        elif optimizer_type == OptimizerType.RMSPROP:
+            return RMSprop(learning_rate)
+        elif optimizer_type == OptimizerType.ADAM:
+            return Adam(learning_rate)
+        elif optimizer_type == OptimizerType.ADADELTA:
+            return Adadelta(learning_rate)
+        elif optimizer_type == OptimizerType.ADAGRAD:
+            return Adagrad(learning_rate)
+        elif optimizer_type == OptimizerType.ADAMAX:
+            return Adamax(learning_rate)
+        elif optimizer_type == OptimizerType.NADAM:
+            return Nadam(learning_rate)
+        else:
+            # i.e. optimizer_type == OptimizerType.FTRL
+            return Ftrl(learning_rate)
+
+
 class VAE:
     def __init__(self, original_dim: int = ORIGINAL_DIM, latent_dim: int = LATENT_DIM, batch_size: int = BATCH_SIZE,
                  intermediate_dim1: int = INTERMEDIATE_DIM1,
@@ -40,6 +90,7 @@ class VAE:
                  kernel_initializer: str = KERNEL_INITIALIZER, bias_initializer: str = BIAS_INITIALIZER,
                  checkpoint_dir: str = CHECKPOINT_DIR,
                  early_stop: bool = EARLY_STOP, save_freq: int = SAVE_FREQ):
+
         self._original_dim = original_dim
         self.latent_dim = latent_dim
         self._batch_size = batch_size
@@ -47,13 +98,11 @@ class VAE:
         self._intermediate_dim2 = intermediate_dim2
         self._intermediate_dim3 = intermediate_dim3
         self._intermediate_dim4 = intermediate_dim4
-        # TODO(@mdragula): _lr is not passed to optimizer so this parameters is unused
-        self._lr = lr
         self._epochs = epochs
         self._activation = activation
         self._out_activation = out_activation
         self._validation_split = validation_split
-        self._optimizer = optimizer
+        self._optimizer = OptimizerFactory.create_optimizer(optimizer_type, learning_rate)
         self._kernel_initializer = kernel_initializer
         self._bias_initializer = bias_initializer
         self._checkpoint_dir = checkpoint_dir

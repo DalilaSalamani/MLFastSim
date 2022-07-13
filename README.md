@@ -33,14 +33,21 @@ In order to launch the training:
 python3 train.py
 ``` 
 
-## Model optimization
+## Hyperparameters tuning
 
-If you want to tune hyperparameters, specify in `optimize.py` parameters to be tuned. There are three types of
+If you want to tune hyperparameters, specify in `tune_model.py` parameters to be tuned. There are three types of
 parameters: discrete, continuous and categorical. Discrete and continuous require range specification (low, high), but
-the categorical parameter requires a list of possible values to be chosen. Then run it with:
+categorical parameters require a list of possible values to be chosen. Then run it with:
 
 ```
-python3 optimize.py
+python3 tune_model.py
+```
+
+If you want to parallelize tuning process you need to specify a common storage (preferable MySQL database) by
+setting `--storage="URL_TO_MYSQL_DATABASE"`. Then you can run multiple processes with the same command:
+
+```
+python3 optimize.py --storage="URL_TO_MYSQL_DATABASE"
 ```
 
 ## ML shower generation (MLFastSim)

@@ -33,14 +33,14 @@ In order to launch the training:
 python3 train.py
 ``` 
 
-## Hyperparameters tuning
+## Model optimization
 
-If you want to tune hyperparameters, specify in `tune_model.py` parameters to be tuned. There are three types of
+If you want to tune hyperparameters, specify in `optimize.py` parameters to be tuned. There are three types of
 parameters: discrete, continuous and categorical. Discrete and continuous require range specification (low, high), but
-categorical parameters require a list of possible values to be chosen. Then run it with:
+the categorical parameter requires a list of possible values to be chosen. Then run it with:
 
 ```
-python3 tune_model.py
+python3 optimize.py
 ```
 
 If you want to parallelize tuning process you need to specify a common storage (preferable MySQL database) by

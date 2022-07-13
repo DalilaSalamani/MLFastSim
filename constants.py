@@ -1,7 +1,5 @@
 from tensorflow.python.keras.layers import LeakyReLU
 
-from model import OptimizerType
-
 """
 Experiment constants.
 """

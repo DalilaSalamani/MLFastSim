@@ -5,9 +5,9 @@ creates validation plots using shower observables
 
 import argparse
 
-from constants import VALID_DIR, INIT_DIR, GEN_DIR, N_CELLS_PHI, N_CELLS_R
-from observables import *
-from preprocess import load_showers
+from core.constants import VALID_DIR, INIT_DIR, GEN_DIR, N_CELLS_PHI
+from utils.observables import *
+from utils.preprocess import load_showers
 
 # parse_args function
 """
@@ -66,21 +66,22 @@ def main():
                  energy_particle, angle_particle, geometry, valid_dir)
     z_ids = np.arange(N_CELLS_Z)
     r_ids = np.arange(N_CELLS_R)
-    fml_g4 =[]
-    fml_vae =[]
-    fmt_g4 =[]
-    fmt_vae =[]
+    fml_g4 = []
+    fml_vae = []
+    fmt_g4 = []
+    fmt_vae = []
     for s_id in range(len(e_layer_g4)):
-        e_g4 = [ np.sum(e_layer_g4[s_id, :, :, i]) for i in range(N_CELLS_Z)  ]
-        fml_g4.append( np.sum([z_ids[i] * SIZE_Z * e_g4[i] for i in range(N_CELLS_Z)])/sum_g4[s_id] )
-        e_vae = [ np.sum(e_layer_vae[s_id, :, :, i]) for i in range(N_CELLS_Z)  ]
-        fml_vae.append( np.sum([z_ids[i] * SIZE_Z * e_vae[i] for i in range(N_CELLS_Z)])/sum_vae[s_id] )
-        e_g4 = [ np.sum(e_layer_g4[s_id, i, :, :]) for i in range(N_CELLS_R)  ]
-        fmt_g4.append( np.sum([r_ids[i] * SIZE_R * e_g4[i] for i in range(N_CELLS_R)])/sum_g4[s_id] )
-        e_vae = [ np.sum(e_layer_vae[s_id, i, :, :]) for i in range(N_CELLS_R)  ]
-        fmt_vae.append( np.sum([r_ids[i] * SIZE_R * e_vae[i] for i in range(N_CELLS_R)])/sum_vae[s_id] )
+        e_g4 = [np.sum(e_layer_g4[s_id, :, :, i]) for i in range(N_CELLS_Z)]
+        fml_g4.append(np.sum([z_ids[i] * SIZE_Z * e_g4[i] for i in range(N_CELLS_Z)]) / sum_g4[s_id])
+        e_vae = [np.sum(e_layer_vae[s_id, :, :, i]) for i in range(N_CELLS_Z)]
+        fml_vae.append(np.sum([z_ids[i] * SIZE_Z * e_vae[i] for i in range(N_CELLS_Z)]) / sum_vae[s_id])
+        e_g4 = [np.sum(e_layer_g4[s_id, i, :, :]) for i in range(N_CELLS_R)]
+        fmt_g4.append(np.sum([r_ids[i] * SIZE_R * e_g4[i] for i in range(N_CELLS_R)]) / sum_g4[s_id])
+        e_vae = [np.sum(e_layer_vae[s_id, i, :, :]) for i in range(N_CELLS_R)]
+        fmt_vae.append(np.sum([r_ids[i] * SIZE_R * e_vae[i] for i in range(N_CELLS_R)]) / sum_vae[s_id])
     longitudinal_first_moment(fml_g4, fml_vae, energy_particle, angle_particle, geometry, valid_dir)
     lateral_first_moment(fmt_g4, fmt_vae, energy_particle, angle_particle, geometry, valid_dir)
+
 
 if __name__ == "__main__":
     exit(main())

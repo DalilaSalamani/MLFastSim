@@ -1,16 +1,15 @@
 from typing import Tuple, Dict, Any, List
 
-import optuna
 import tensorflow as tf
 from optuna import Trial, create_study, get_all_study_summaries, load_study
 from optuna.pruners import MedianPruner
 from optuna.trial import TrialState
 
-from constants import LEARNING_RATE, BATCH_SIZE, ORIGINAL_DIM, INTERMEDIATE_DIM1, INTERMEDIATE_DIM2, INTERMEDIATE_DIM3, \
-    INTERMEDIATE_DIM4, EPOCHS, ACTIVATION, OUT_ACTIVATION, VALIDATION_SPLIT, CHECKPOINT_DIR, OPTIMIZER_TYPE, \
-    KERNEL_INITIALIZER, BIAS_INITIALIZER, N_TRIALS, LATENT_DIM, SAVE_FREQ
-from model import VAE
-from preprocess import preprocess
+from core.constants import LEARNING_RATE, BATCH_SIZE, ORIGINAL_DIM, INTERMEDIATE_DIM1, INTERMEDIATE_DIM2, \
+    INTERMEDIATE_DIM3, INTERMEDIATE_DIM4, EPOCHS, ACTIVATION, OUT_ACTIVATION, VALIDATION_SPLIT, CHECKPOINT_DIR, \
+    OPTIMIZER_TYPE, KERNEL_INITIALIZER, BIAS_INITIALIZER, N_TRIALS, LATENT_DIM, SAVE_FREQ
+from core.model import VAE
+from utils.preprocess import preprocess
 
 
 class HyperparameterTuner:
@@ -57,81 +56,85 @@ class HyperparameterTuner:
             Variational Autoencoder (VAE)
         """
 
-        # TODO(@mdragula): add low/high annotations in suggest_int, suggest_float.
         # Discrete parameters
         if "original_dim" in self._discrete_parameters.keys():
-            original_dim = trial.suggest_int("original_dim", self._discrete_parameters["original_dim"][0],
-                                             self._discrete_parameters["original_dim"][1])
+            original_dim = trial.suggest_int(name="original_dim",
+                                             low=self._discrete_parameters["original_dim"][0],
+                                             high=self._discrete_parameters["original_dim"][1])
         else:
             original_dim = ORIGINAL_DIM
 
         if "intermediate_dim1" in self._discrete_parameters.keys():
-            intermediate_dim1 = trial.suggest_int("intermediate_dim1",
-                                                  self._discrete_parameters["intermediate_dim1"][0],
-                                                  self._discrete_parameters["intermediate_dim1"][1])
+            intermediate_dim1 = trial.suggest_int(name="intermediate_dim1",
+                                                  low=self._discrete_parameters["intermediate_dim1"][0],
+                                                  high=self._discrete_parameters["intermediate_dim1"][1])
         else:
             intermediate_dim1 = INTERMEDIATE_DIM1
 
         if "intermediate_dim2" in self._discrete_parameters.keys():
-            intermediate_dim2 = trial.suggest_int("intermediate_dim2",
-                                                  self._discrete_parameters["intermediate_dim2"][0],
-                                                  self._discrete_parameters["intermediate_dim2"][1])
+            intermediate_dim2 = trial.suggest_int(name="intermediate_dim2",
+                                                  low=self._discrete_parameters["intermediate_dim2"][0],
+                                                  high=self._discrete_parameters["intermediate_dim2"][1])
         else:
             intermediate_dim2 = INTERMEDIATE_DIM2
 
         if "intermediate_dim3" in self._discrete_parameters.keys():
-            intermediate_dim3 = trial.suggest_int("intermediate_dim3",
-                                                  self._discrete_parameters["intermediate_dim3"][0],
-                                                  self._discrete_parameters["intermediate_dim3"][1])
+            intermediate_dim3 = trial.suggest_int(name="intermediate_dim3",
+                                                  low=self._discrete_parameters["intermediate_dim3"][0],
+                                                  high=self._discrete_parameters["intermediate_dim3"][1])
         else:
             intermediate_dim3 = INTERMEDIATE_DIM3
 
         if "intermediate_dim4" in self._discrete_parameters.keys():
-            intermediate_dim4 = trial.suggest_int("intermediate_dim4",
-                                                  self._discrete_parameters["intermediate_dim4"][0],
-                                                  self._discrete_parameters["intermediate_dim4"][1])
+            intermediate_dim4 = trial.suggest_int(name="intermediate_dim4",
+                                                  low=self._discrete_parameters["intermediate_dim4"][0],
+                                                  high=self._discrete_parameters["intermediate_dim4"][1])
         else:
             intermediate_dim4 = INTERMEDIATE_DIM4
 
         if "latent_dim" in self._discrete_parameters.keys():
-            latent_dim = trial.suggest_int("latent_dim",
-                                           self._discrete_parameters["latent_dim"][0],
-                                           self._discrete_parameters["latent_dim"][1])
+            latent_dim = trial.suggest_int(name="latent_dim",
+                                           low=self._discrete_parameters["latent_dim"][0],
+                                           high=self._discrete_parameters["latent_dim"][1])
         else:
             latent_dim = LATENT_DIM
 
         # Continuous parameters
         if "learning_rate" in self._continuous_parameters.keys():
-            learning_rate = trial.suggest_float("learning_rate", low=self._continuous_parameters["learning_rate"][0],
+            learning_rate = trial.suggest_float(name="learning_rate",
+                                                low=self._continuous_parameters["learning_rate"][0],
                                                 high=self._continuous_parameters["learning_rate"][1])
         else:
             learning_rate = LEARNING_RATE
 
         # Categorical parameters
         if "activation" in self._categorical_parameters.keys():
-            activation = trial.suggest_categorical("activation", self._categorical_parameters["activation"])
+            activation = trial.suggest_categorical(name="activation",
+                                                   choices=self._categorical_parameters["activation"])
         else:
             activation = ACTIVATION
 
         if "out_activation" in self._categorical_parameters.keys():
-            out_activation = trial.suggest_categorical("out_activation", self._categorical_parameters["out_activation"])
+            out_activation = trial.suggest_categorical(name="out_activation",
+                                                       choices=self._categorical_parameters["out_activation"])
         else:
             out_activation = OUT_ACTIVATION
 
         if "optimizer_type" in self._categorical_parameters.keys():
-            optimizer_type = trial.suggest_categorical("optimizer_type", self._categorical_parameters["optimizer_type"])
+            optimizer_type = trial.suggest_categorical(name="optimizer_type",
+                                                       choices=self._categorical_parameters["optimizer_type"])
         else:
             optimizer_type = OPTIMIZER_TYPE
 
         if "kernel_initializer" in self._categorical_parameters.keys():
-            kernel_initializer = trial.suggest_categorical("kernel_initializer",
-                                                           self._categorical_parameters["kernel_initializer"])
+            kernel_initializer = trial.suggest_categorical(name="kernel_initializer",
+                                                           choices=self._categorical_parameters["kernel_initializer"])
         else:
             kernel_initializer = KERNEL_INITIALIZER
 
         if "bias_initializer" in self._categorical_parameters.keys():
-            bias_initializer = trial.suggest_categorical("bias_initializer",
-                                                         self._categorical_parameters["bias_initializer"])
+            bias_initializer = trial.suggest_categorical(name="bias_initializer",
+                                                         choices=self._categorical_parameters["bias_initializer"])
         else:
             bias_initializer = BIAS_INITIALIZER
 

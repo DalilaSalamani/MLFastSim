@@ -6,9 +6,9 @@ import argparse
 
 import numpy as np
 
-from constants import CHECKPOINT_DIR, GEN_DIR
-from instantiate_model import instantiate
-from preprocess import get_condition_arrays
+from utils.preprocess import get_condition_arrays
+from core.constants import CHECKPOINT_DIR, GEN_DIR
+from core.model import VAE
 
 """
     - geometry : name of the calorimeter geometry (eg: SiW, SciPb)
@@ -42,7 +42,7 @@ def main():
     # 1. Get condition values
     cond_e, cond_angle, cond_geo = get_condition_arrays(geometry, energy_particle, nb_events)
     # 2. Load a saved model
-    vae = instantiate()
+    vae = VAE()
     # Load the saved weights
     vae.vae.load_weights(f"{CHECKPOINT_DIR}VAE-{epoch}.h5")
     # The generator is defined as the decoder part only

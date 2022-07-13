@@ -8,8 +8,8 @@ import sys
 
 import keras2onnx
 
-from constants import CHECKPOINT_DIR
-from instantiate_model import instantiate
+from core.constants import CHECKPOINT_DIR
+from core.model import VAE
 
 """
     epoch: epoch of the saved checkpoint model
@@ -30,7 +30,7 @@ def main(argv):
     args = parse_args(argv)
     epoch = args.epoch
     # Instantiate and load a saved model
-    vae = instantiate()
+    vae = VAE()
     # Load the saved weights
     vae.vae.load_weights(f"{CHECKPOINT_DIR}VAE-{epoch}.h5")
 

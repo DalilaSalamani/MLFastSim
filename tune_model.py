@@ -2,11 +2,10 @@ import os
 from argparse import ArgumentParser
 
 import tensorflow as tf
-
-from constants import MAX_GPU_MEMORY_ALLOCATION, GPU_ID
+from core.constants import MAX_GPU_MEMORY_ALLOCATION, GPU_ID
 
 # Hyperparemeters to be optimized.
-from hyperparameter_tuner import HyperparameterTuner
+from utils.hyperparameter_tuner import HyperparameterTuner
 
 discrete_parameters = {"intermediate_dim1": (50, 200), "intermediate_dim2": (20, 100), "intermediate_dim3": (10, 50),
                        "intermediate_dim4": (5, 20), "latent_dim": (3, 15)}

@@ -1,7 +1,3 @@
-"""
-** constants **
-defines the set of common variables
-"""
 from tensorflow.python.keras.layers import LeakyReLU
 
 from model import OptimizerType
@@ -51,8 +47,6 @@ INTERMEDIATE_DIM3 = 20
 INTERMEDIATE_DIM4 = 10 + 4
 LATENT_DIM = 10
 EPOCHS = 10
-LR = 0.001
-EPOCHS = 20
 LEARNING_RATE = 0.001
 SAVE_FREQ = 100
 ACTIVATION = LeakyReLU()
@@ -66,7 +60,7 @@ EARLY_STOP = False
 """
 Optimizer parameters.
 """
-N_TRIALS = 20
+N_TRIALS = 5
 # Maximum allowed memory on one of the GPUs (in GB)
 MAX_GPU_MEMORY_ALLOCATION = 8
 # ID of GPU used in a process

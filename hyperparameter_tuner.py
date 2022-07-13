@@ -1,5 +1,6 @@
 from typing import Tuple, Dict, Any, List
 
+import optuna
 import tensorflow as tf
 from optuna import Trial, create_study, get_all_study_summaries, load_study
 from optuna.pruners import MedianPruner
@@ -56,6 +57,7 @@ class HyperparameterTuner:
             Variational Autoencoder (VAE)
         """
 
+        # TODO(@mdragula): add low/high annotations in suggest_int, suggest_float.
         # Discrete parameters
         if "original_dim" in self._discrete_parameters.keys():
             original_dim = trial.suggest_int("original_dim", self._discrete_parameters["original_dim"][0],
@@ -135,10 +137,11 @@ class HyperparameterTuner:
 
         return VAE(batch_size=BATCH_SIZE, original_dim=original_dim, intermediate_dim1=intermediate_dim1,
                    intermediate_dim2=intermediate_dim2, intermediate_dim3=intermediate_dim3,
-                   intermediate_dim4=intermediate_dim4, latent_dim=latent_dim, epochs=EPOCHS, lr=lr,
-                   activation=activation, out_activation=out_activation, validation_split=VALIDATION_SPLIT,
-                   optimizer=optimizer, kernel_initializer=kernel_initializer, bias_initializer=bias_initializer,
-                   early_stop=True, checkpoint_dir=CHECKPOINT_DIR, save_freq=SAVE_FREQ)
+                   intermediate_dim4=intermediate_dim4, latent_dim=latent_dim, epochs=EPOCHS,
+                   learning_rate=learning_rate, activation=activation, out_activation=out_activation,
+                   validation_split=VALIDATION_SPLIT, optimizer_type=optimizer_type,
+                   kernel_initializer=kernel_initializer, bias_initializer=bias_initializer, early_stop=True,
+                   checkpoint_dir=CHECKPOINT_DIR, save_freq=SAVE_FREQ)
 
     def _objective(self, trial: Trial) -> float:
         """For a given trial trains the model and returns validation loss.
@@ -168,14 +171,10 @@ class HyperparameterTuner:
     def tune(self) -> None:
         """Main tuning function.
 
-        It creates a study, tunes the model and prints detailed information about the best trial (value of the
+        Based on a given study, tunes the model and prints detailed information about the best trial (value of the
         objective function and adjusted parameters).
         """
 
-        study = optuna.create_study(direction="minimize", pruner=optuna.pruners.MedianPruner())
-        study.optimize(self._objective, n_trials=N_TRIALS)
-        pruned_trials = study.get_trials(deepcopy=False, states=(TrialState.PRUNED,))
-        complete_trials = study.get_trials(deepcopy=False, states=(TrialState.COMPLETE,))
         self._study.optimize(func=self._objective, n_trials=N_TRIALS, gc_after_trial=True)
         pruned_trials = self._study.get_trials(deepcopy=False, states=(TrialState.PRUNED,))
         complete_trials = self._study.get_trials(deepcopy=False, states=(TrialState.COMPLETE,))

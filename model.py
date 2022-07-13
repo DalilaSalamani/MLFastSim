@@ -1,7 +1,3 @@
-"""
-** model **
-defines the VAE model class 
-"""
 from enum import Enum
 
 import numpy

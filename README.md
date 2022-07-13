@@ -43,6 +43,13 @@ the categorical parameter requires a list of possible values to be chosen. Then 
 python3 optimize.py
 ```
 
+If you want to parallelize tuning process you need to specify a common storage (preferable MySQL database) by
+setting `--storage="URL_TO_MYSQL_DATABASE"`. Then you can run multiple processes with the same command:
+
+```
+python3 optimize.py --storage="URL_TO_MYSQL_DATABASE"
+```
+
 ## ML shower generation (MLFastSim)
 
 In order to generate showers using the ML model, use `generate.py` script and specify information of geometry, energy

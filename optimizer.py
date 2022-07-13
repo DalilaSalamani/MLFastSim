@@ -1,8 +1,8 @@
 from typing import Tuple, Dict, Any, List
 
-import optuna
 import tensorflow as tf
-from optuna import Trial
+from optuna import Trial, create_study, get_all_study_summaries, load_study
+from optuna.pruners import MedianPruner
 from optuna.trial import TrialState
 
 from constants import LR, BATCH_SIZE, ORIGINAL_DIM, INTERMEDIATE_DIM1, INTERMEDIATE_DIM2, INTERMEDIATE_DIM3, \
@@ -19,15 +19,32 @@ class Optimizer:
         _discrete_parameters: A dictionary of hyperparameters taking discrete values in the range [low, high].
         _continuous_parameters: A dictionary of hyperparameters taking continuous values in the range [low, high].
         _categorical_parameters: A dictionary of hyperparameters taking values specified by the list of them.
+        _study: A study corresponds to an optimization task, i.e., a set of trials.
+
 
     """
 
     def __init__(self, discrete_parameters: Dict[str, Tuple[int, int]],
-                 continuous_parameters: Dict[str, Tuple[float, float]], categorical_parameters: Dict[str, List[Any]]):
+                 continuous_parameters: Dict[str, Tuple[float, float]], categorical_parameters: Dict[str, List[Any]],
+                 storage: str = None, study_name: str = None):
         self._discrete_parameters = discrete_parameters
         self._continuous_parameters = continuous_parameters
         self._categorical_parameters = categorical_parameters
         self._energies_train, self._cond_e_train, self._cond_angle_train, self._cond_geo_train = preprocess()
+
+        if storage is not None and study_name is not None:
+            # Parallel optimization
+            study_summaries = get_all_study_summaries(storage)
+            if any(study_name == study_summary.study_name for study_summary in study_summaries):
+                # The study is already created in the database. Load it.
+                self._study = load_study(study_name, storage)
+            else:
+                # The study does not exist in the database. Create a new one.
+                self._study = create_study(storage=storage, sampler=None, pruner=MedianPruner(), study_name=study_name,
+                                           direction="minimize")
+        else:
+            # Single optimization
+            self._study = create_study(sampler=None, pruner=MedianPruner(), direction="minimize")
 
     def _create_model(self, trial: Trial) -> VAE:
         """For a given trail builds the model.
@@ -108,25 +125,12 @@ class Optimizer:
         else:
             bias_initializer = BIAS_INITIALIZER
 
-        model = VAE(batch_size=BATCH_SIZE,
-                    original_dim=original_dim,
-                    intermediate_dim1=intermediate_dim1,
-                    intermediate_dim2=intermediate_dim2,
-                    intermediate_dim3=intermediate_dim3,
-                    intermediate_dim4=intermediate_dim4,
-                    latent_dim=latent_dim,
-                    epochs=EPOCHS,
-                    lr=lr,
-                    activation=activation,
-                    out_activation=out_activation,
-                    validation_split=VALIDATION_SPLIT,
-                    optimizer=optimizer,
-                    kernel_initializer=kernel_initializer,
-                    bias_initializer=bias_initializer,
-                    early_stop=True,
-                    checkpoint_dir=CHECKPOINT_DIR,
-                    save_freq=SAVE_FREQ)
-        return model
+        return VAE(batch_size=BATCH_SIZE, original_dim=original_dim, intermediate_dim1=intermediate_dim1,
+                   intermediate_dim2=intermediate_dim2, intermediate_dim3=intermediate_dim3,
+                   intermediate_dim4=intermediate_dim4, latent_dim=latent_dim, epochs=EPOCHS, lr=lr,
+                   activation=activation, out_activation=out_activation, validation_split=VALIDATION_SPLIT,
+                   optimizer=optimizer, kernel_initializer=kernel_initializer, bias_initializer=bias_initializer,
+                   early_stop=True, checkpoint_dir=CHECKPOINT_DIR, save_freq=SAVE_FREQ)
 
     def _objective(self, trial: Trial) -> float:
         """For a given trial trains the model and returns validation loss.
@@ -144,12 +148,8 @@ class Optimizer:
 
         # Train the model.
         verbose = True
-        history = model.train(self._energies_train,
-                              self._cond_e_train,
-                              self._cond_angle_train,
-                              self._cond_geo_train,
-                              verbose
-                              )
+        history = model.train(self._energies_train, self._cond_e_train, self._cond_angle_train, self._cond_geo_train,
+                              verbose)
 
         # Return validation loss (currently it is treated as an objective goal).
         validation_loss_history = history.history["val_loss"]
@@ -159,20 +159,19 @@ class Optimizer:
     def optimize(self) -> None:
         """Main optimization function.
 
-        It creates a study, optimize model and prints detailed information
+        Based on a given study, optimizes model and prints detailed information
         about the best trial (value of the objective function and adjusted parameters).
         """
-        study = optuna.create_study(direction="minimize", pruner=optuna.pruners.MedianPruner())
-        study.optimize(self._objective, n_trials=N_TRIALS)
-        pruned_trials = study.get_trials(deepcopy=False, states=(TrialState.PRUNED,))
-        complete_trials = study.get_trials(deepcopy=False, states=(TrialState.COMPLETE,))
+        self._study.optimize(func=self._objective, n_trials=N_TRIALS, gc_after_trial=True)
+        pruned_trials = self._study.get_trials(deepcopy=False, states=(TrialState.PRUNED,))
+        complete_trials = self._study.get_trials(deepcopy=False, states=(TrialState.COMPLETE,))
         print("Study statistics: ")
-        print("  Number of finished trials: ", len(study.trials))
+        print("  Number of finished trials: ", len(self._study.trials))
         print("  Number of pruned trials: ", len(pruned_trials))
         print("  Number of complete trials: ", len(complete_trials))
 
         print("Best trial:")
-        trial = study.best_trial
+        trial = self._study.best_trial
 
         print("  Value: ", trial.value)
 

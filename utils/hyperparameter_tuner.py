@@ -1,14 +1,15 @@
 from typing import Tuple, Dict, Any, List
 
+import numpy as np
 import tensorflow as tf
 from optuna import Trial, create_study, get_all_study_summaries, load_study
 from optuna.pruners import MedianPruner
 from optuna.trial import TrialState
 
-from core.constants import LEARNING_RATE, BATCH_SIZE, ORIGINAL_DIM, INTERMEDIATE_DIM1, INTERMEDIATE_DIM2, \
-    INTERMEDIATE_DIM3, INTERMEDIATE_DIM4, EPOCHS, ACTIVATION, OUT_ACTIVATION, VALIDATION_SPLIT, CHECKPOINT_DIR, \
-    OPTIMIZER_TYPE, KERNEL_INITIALIZER, BIAS_INITIALIZER, N_TRIALS, LATENT_DIM, SAVE_FREQ
-from core.model import VAE
+from core.constants import LEARNING_RATE, BATCH_SIZE, ORIGINAL_DIM, EPOCHS, ACTIVATION, OUT_ACTIVATION, \
+    VALIDATION_SPLIT, CHECKPOINT_DIR, OPTIMIZER_TYPE, KERNEL_INITIALIZER, BIAS_INITIALIZER, N_TRIALS, LATENT_DIM, \
+    SAVE_FREQ, INTERMEDIATE_DIMS, MAX_HIDDEN_LAYER_DIM
+from core.model import VAEHandler
 from utils.preprocess import preprocess
 
 
@@ -44,7 +45,7 @@ class HyperparameterTuner:
             # Single optimization
             self._study = create_study(sampler=None, pruner=MedianPruner(), direction="minimize")
 
-    def _create_model(self, trial: Trial) -> VAE:
+    def _create_model(self, trial: Trial) -> VAEHandler:
         """For a given trail builds the model.
 
         Optuna suggests parameters like dimensions of particular layers of the model, learning rate, optimizer, etc.
@@ -57,47 +58,29 @@ class HyperparameterTuner:
         """
 
         # Discrete parameters
-        if "original_dim" in self._discrete_parameters.keys():
-            original_dim = trial.suggest_int(name="original_dim",
-                                             low=self._discrete_parameters["original_dim"][0],
-                                             high=self._discrete_parameters["original_dim"][1])
-        else:
-            original_dim = ORIGINAL_DIM
-
-        if "intermediate_dim1" in self._discrete_parameters.keys():
-            intermediate_dim1 = trial.suggest_int(name="intermediate_dim1",
-                                                  low=self._discrete_parameters["intermediate_dim1"][0],
-                                                  high=self._discrete_parameters["intermediate_dim1"][1])
-        else:
-            intermediate_dim1 = INTERMEDIATE_DIM1
-
-        if "intermediate_dim2" in self._discrete_parameters.keys():
-            intermediate_dim2 = trial.suggest_int(name="intermediate_dim2",
-                                                  low=self._discrete_parameters["intermediate_dim2"][0],
-                                                  high=self._discrete_parameters["intermediate_dim2"][1])
-        else:
-            intermediate_dim2 = INTERMEDIATE_DIM2
-
-        if "intermediate_dim3" in self._discrete_parameters.keys():
-            intermediate_dim3 = trial.suggest_int(name="intermediate_dim3",
-                                                  low=self._discrete_parameters["intermediate_dim3"][0],
-                                                  high=self._discrete_parameters["intermediate_dim3"][1])
-        else:
-            intermediate_dim3 = INTERMEDIATE_DIM3
-
-        if "intermediate_dim4" in self._discrete_parameters.keys():
-            intermediate_dim4 = trial.suggest_int(name="intermediate_dim4",
-                                                  low=self._discrete_parameters["intermediate_dim4"][0],
-                                                  high=self._discrete_parameters["intermediate_dim4"][1])
-        else:
-            intermediate_dim4 = INTERMEDIATE_DIM4
-
         if "latent_dim" in self._discrete_parameters.keys():
             latent_dim = trial.suggest_int(name="latent_dim",
                                            low=self._discrete_parameters["latent_dim"][0],
                                            high=self._discrete_parameters["latent_dim"][1])
         else:
             latent_dim = LATENT_DIM
+
+        if "nb_hidden_layers" in self._discrete_parameters.keys():
+            nb_hidden_layers = trial.suggest_int(name="nb_hidden_layers",
+                                                 low=self._discrete_parameters["nb_hidden_layers"][0],
+                                                 high=self._discrete_parameters["nb_hidden_layers"][1])
+
+            all_possible = np.arange(start=latent_dim + 5, stop=MAX_HIDDEN_LAYER_DIM)
+            chunks = np.array_split(all_possible, nb_hidden_layers)
+            ranges = [(chunk[0], chunk[-1]) for chunk in chunks]
+            ranges = reversed(ranges)
+
+            intermediate_dims = [trial.suggest_int(name=f"intermediate_dim_{i}", low=low, high=high) for i, (low, high)
+                                 in enumerate(ranges)]
+
+            print(intermediate_dims)
+        else:
+            intermediate_dims = INTERMEDIATE_DIMS
 
         # Continuous parameters
         if "learning_rate" in self._continuous_parameters.keys():
@@ -138,13 +121,21 @@ class HyperparameterTuner:
         else:
             bias_initializer = BIAS_INITIALIZER
 
-        return VAE(batch_size=BATCH_SIZE, original_dim=original_dim, intermediate_dim1=intermediate_dim1,
-                   intermediate_dim2=intermediate_dim2, intermediate_dim3=intermediate_dim3,
-                   intermediate_dim4=intermediate_dim4, latent_dim=latent_dim, epochs=EPOCHS,
-                   learning_rate=learning_rate, activation=activation, out_activation=out_activation,
-                   validation_split=VALIDATION_SPLIT, optimizer_type=optimizer_type,
-                   kernel_initializer=kernel_initializer, bias_initializer=bias_initializer, early_stop=True,
-                   checkpoint_dir=CHECKPOINT_DIR, save_freq=SAVE_FREQ)
+        return VAEHandler(batch_size=BATCH_SIZE,
+                          original_dim=ORIGINAL_DIM,
+                          intermediate_dims=intermediate_dims,
+                          latent_dim=latent_dim,
+                          epochs=EPOCHS,
+                          learning_rate=learning_rate,
+                          activation=activation,
+                          out_activation=out_activation,
+                          validation_split=VALIDATION_SPLIT,
+                          optimizer_type=optimizer_type,
+                          kernel_initializer=kernel_initializer,
+                          bias_initializer=bias_initializer,
+                          early_stop=True,
+                          checkpoint_dir=CHECKPOINT_DIR,
+                          save_freq=SAVE_FREQ)
 
     def _objective(self, trial: Trial) -> float:
         """For a given trial trains the model and returns validation loss.
@@ -167,7 +158,7 @@ class HyperparameterTuner:
                               verbose)
 
         # Return validation loss (currently it is treated as an objective goal).
-        validation_loss_history = history.history["val_loss"]
+        validation_loss_history = history.history["val_total_loss"]
         final_validation_loss = validation_loss_history[-1]
         return final_validation_loss
 

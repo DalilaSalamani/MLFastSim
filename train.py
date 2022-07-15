@@ -1,5 +1,5 @@
+from core.model import VAEHandler
 from utils.preprocess import preprocess
-from core.model import VAE
 
 # 1. Data loading/preprocessing
 
@@ -8,7 +8,7 @@ from core.model import VAE
 energies_train, cond_e_train, cond_angle_train, cond_geo_train = preprocess()
 
 # 2. Model architecture
-vae = VAE()
+vae = VAEHandler()
 
 # 3. Model training
 history = vae.train(energies_train,

@@ -2,14 +2,13 @@ import os
 from argparse import ArgumentParser
 
 import tensorflow as tf
-from core.constants import MAX_GPU_MEMORY_ALLOCATION, GPU_ID
 
-# Hyperparemeters to be optimized.
+from core.constants import MAX_GPU_MEMORY_ALLOCATION, GPU_ID
 from utils.hyperparameter_tuner import HyperparameterTuner
 
-discrete_parameters = {"intermediate_dim1": (50, 200), "intermediate_dim2": (20, 100), "intermediate_dim3": (10, 50),
-                       "intermediate_dim4": (5, 20), "latent_dim": (3, 15)}
-continuous_parameters = {"lr": (0.0001, 0.01)}
+# Hyperparemeters to be optimized.
+discrete_parameters = {"nb_hidden_layers": (1, 6)}
+continuous_parameters = {"learning_rate": (0.0001, 0.01)}
 categorical_parameters = {}
 
 

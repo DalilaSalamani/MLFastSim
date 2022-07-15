@@ -1,35 +1,117 @@
+from typing import List, Any, Dict, Tuple
+
 import numpy as np
-from tensorflow.keras import backend as k
-from tensorflow.keras import metrics
-from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
-from tensorflow.keras.layers import BatchNormalization
-from tensorflow.keras.layers import Input, Dense, Lambda, Layer, Multiply, Add, concatenate
+import tensorflow as tf
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, History
+from tensorflow.keras.layers import BatchNormalization, Input, Dense, Layer, concatenate
+from tensorflow.keras.losses import binary_crossentropy
+from tensorflow.keras.metrics import Mean
 from tensorflow.keras.models import Model
 
-from core.constants import ORIGINAL_DIM, LATENT_DIM, BATCH_SIZE, INTERMEDIATE_DIM1, INTERMEDIATE_DIM3, \
-    INTERMEDIATE_DIM2, EPOCHS, LEARNING_RATE, INTERMEDIATE_DIM4, ACTIVATION, OUT_ACTIVATION, OPTIMIZER_TYPE, \
-    VALIDATION_SPLIT, KERNEL_INITIALIZER, CHECKPOINT_DIR, EARLY_STOP, BIAS_INITIALIZER, SAVE_FREQ
-
-# KL divergence computation
+from core.constants import ORIGINAL_DIM, LATENT_DIM, BATCH_SIZE, EPOCHS, LEARNING_RATE, ACTIVATION, OUT_ACTIVATION, \
+    OPTIMIZER_TYPE, VALIDATION_SPLIT, KERNEL_INITIALIZER, CHECKPOINT_DIR, EARLY_STOP, BIAS_INITIALIZER, SAVE_FREQ, \
+    INTERMEDIATE_DIMS
 from utils.optimizer import OptimizerFactory, OptimizerType
 
 
-class _KLDivergenceLayer(Layer):
-    def __init__(self, *args, **kwargs):
-        self.is_placeholder = True
-        super(_KLDivergenceLayer, self).__init__(*args, **kwargs)
+class _Sampling(Layer):
+    """ Custom layer to do the reparameterization trick: sample random latent vectors z from the latent Gaussian
+    distribution.
 
-    def calc(self, inputs):
-        mu, log_var = inputs
-        kl_batch = -0.5 * k.sum(1 + log_var - k.square(mu) - k.exp(log_var), axis=-1)
-        self.add_loss(k.mean(kl_batch), inputs=inputs)
-        return inputs
+    The sampled vector z is given by sampled_z = mean + std * epsilon
+    """
+
+    def call(self, inputs, **kwargs):
+        z_mean, z_log_var = inputs
+        z_sigma = tf.math.exp(0.5 * z_log_var)
+        epsilon = tf.random.normal(tf.shape(z_sigma))
+        return z_mean + z_sigma * epsilon
 
 
-class VAE:
+class _Reparametrize(Layer):
+    """
+    Custom layer to do the reparameterization trick: sample random latent vectors z from the latent Gaussian
+    distribution.
+
+    The sampled vector z is given by sampled_z = mean + std * epsilon
+    """
+
+    def call(self, inputs, **kwargs):
+        z_mean, z_log_var = inputs
+        z_sigma = tf.math.exp(0.5 * z_log_var)
+        epsilon = tf.random.normal(tf.shape(z_sigma))
+        return z_mean + z_sigma * epsilon
+
+
+class VAE(Model):
+    def get_config(self):
+        raise NotImplementedError
+
+    def call(self, inputs, training=None, mask=None):
+        raise Exception("It does not make sense to call VAE. You may want to call either encoder or decoder.")
+
+    def __init__(self, encoder, decoder, **kwargs):
+        super(VAE, self).__init__(**kwargs)
+        self.encoder = encoder
+        self.decoder = decoder
+        self.total_loss_tracker = Mean(name="total_loss")
+        self.val_total_loss_tracker = Mean(name="val_total_loss")
+
+    @property
+    def metrics(self):
+        return [self.total_loss_tracker, self.val_total_loss_tracker]
+
+    def _perform_step(self, data: Any) -> Tuple[float, float, float]:
+        # Unpack data.
+        ([x_input, e_input, angle_input, geo_input],) = data
+        # Encode data and get new probability distribution with a vector z sampled from it.
+        z_mean, z_log_var, z = self.encoder([x_input, e_input, angle_input, geo_input])
+        # Reconstruct the original data.
+        reconstruction = self.decoder([z, e_input, angle_input, geo_input])
+
+        x_input = tf.expand_dims(x_input, -1)
+        reconstruction = tf.expand_dims(reconstruction, -1)
+
+        # Calculate reconstruction loss.
+        reconstruction_loss = tf.reduce_mean(
+            tf.reduce_sum(binary_crossentropy(x_input, reconstruction), axis=1))
+
+        # Calculate Kullback-Leibler divergence.
+        kl_loss = -0.5 * (1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var))
+        kl_loss = tf.reduce_mean(tf.reduce_sum(kl_loss, axis=1))
+
+        # Calculated weighted total loss (ORIGINAL_DIM is a weight).
+        total_loss = ORIGINAL_DIM * reconstruction_loss + kl_loss
+
+        return total_loss, reconstruction_loss, kl_loss
+
+    def train_step(self, data: Any) -> Dict[str, object]:
+        with tf.GradientTape() as tape:
+            # Perform step, backpropagate it through the network and update the tracker.
+            total_loss, reconstruction_loss, kl_loss = self._perform_step(data)
+
+            grads = tape.gradient(total_loss, self.trainable_weights)
+            self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
+            self.total_loss_tracker.update_state(total_loss)
+
+        return {"total_loss": self.total_loss_tracker.result()}
+
+    def test_step(self, data: Any) -> Dict[str, object]:
+        # Perform step and update the tracker (no backpropagation).
+        val_total_loss, val_reconstruction_loss, val_kl_loss = self._perform_step(data)
+
+        self.val_total_loss_tracker.update_state(val_total_loss)
+
+        return {"total_loss": self.val_total_loss_tracker.result()}
+
+
+class VAEHandler:
+    """
+    Class to handle building and training VAE models.
+    """
+
     def __init__(self, original_dim: int = ORIGINAL_DIM, latent_dim: int = LATENT_DIM, batch_size: int = BATCH_SIZE,
-                 intermediate_dim1: int = INTERMEDIATE_DIM1, intermediate_dim2: int = INTERMEDIATE_DIM2,
-                 intermediate_dim3: int = INTERMEDIATE_DIM3, intermediate_dim4: int = INTERMEDIATE_DIM4,
+                 intermediate_dims: List[int] = INTERMEDIATE_DIMS,
                  learning_rate: float = LEARNING_RATE, epochs: int = EPOCHS, activation: str = ACTIVATION,
                  out_activation: str = OUT_ACTIVATION, validation_split: float = VALIDATION_SPLIT,
                  optimizer_type: OptimizerType = OPTIMIZER_TYPE, kernel_initializer: str = KERNEL_INITIALIZER,
@@ -37,88 +119,138 @@ class VAE:
                  early_stop: bool = EARLY_STOP, save_freq: int = SAVE_FREQ):
         self._original_dim = original_dim
         self.latent_dim = latent_dim
+        self._intermediate_dims = intermediate_dims
         self._batch_size = batch_size
-        self._intermediate_dim1 = intermediate_dim1
-        self._intermediate_dim2 = intermediate_dim2
-        self._intermediate_dim3 = intermediate_dim3
-        self._intermediate_dim4 = intermediate_dim4
         self._epochs = epochs
         self._activation = activation
         self._out_activation = out_activation
         self._validation_split = validation_split
-        self._optimizer = OptimizerFactory.create_optimizer(optimizer_type, learning_rate)
-        self._kernel_initializer = kernel_initializer
         self._bias_initializer = bias_initializer
+        self._kernel_initializer = kernel_initializer
         self._checkpoint_dir = checkpoint_dir
         self._early_stop = early_stop
         self._save_freq = save_freq
 
-        # Build the encoder
-        x_in = Input((self._original_dim,))
-        e_cond = Input(shape=(1,))
-        angle_cond = Input(shape=(1,))
-        geo_cond = Input(shape=(2,))
-        merged_input = concatenate([x_in, e_cond, angle_cond, geo_cond], )
-        h1 = Dense(self._intermediate_dim1, activation=self._activation,
-                   kernel_initializer=self._kernel_initializer, bias_initializer=self._bias_initializer)(merged_input)
-        h1 = BatchNormalization()(h1)
-        h2 = Dense(self._intermediate_dim2, activation=self._activation,
-                   kernel_initializer=self._kernel_initializer, bias_initializer=self._bias_initializer)(h1)
-        h2 = BatchNormalization()(h2)
-        h3 = Dense(self._intermediate_dim3, activation=self._activation,
-                   kernel_initializer=self._kernel_initializer, bias_initializer=self._bias_initializer)(h2)
-        h3 = BatchNormalization()(h3)
-        h4 = Dense(self._intermediate_dim4, activation=self._activation,
-                   kernel_initializer=self._kernel_initializer, bias_initializer=self._bias_initializer)(h3)
-        h = BatchNormalization()(h4)
-        z_mu = Dense(self.latent_dim, )(h)
-        z_log_var = Dense(self.latent_dim, )(h)
-        # compute the KL divergence
-        z_mu, z_log_var = _KLDivergenceLayer().calc([z_mu, z_log_var])
-        # Reparameterization trick
-        z_sigma = Lambda(lambda t: k.exp(.5 * t))(z_log_var)
-        eps = Input(tensor=k.random_normal(shape=(k.shape(x_in)[0], self.latent_dim)))
-        z_eps = Multiply()([z_sigma, eps])
-        z = Add()([z_mu, z_eps])
-        z_cond = concatenate([z, e_cond, angle_cond, geo_cond], )
-        # This defines the encoder which takes noise and input and outputs the latent variable z
-        self.encoder = Model(inputs=[x_in, e_cond, angle_cond, geo_cond, eps], outputs=z_cond)
-        # Build the decoder / Generator
-        deco_l4 = Dense(self._intermediate_dim4, input_dim=(self.latent_dim + 4),
-                        activation=self._activation, kernel_initializer=self._kernel_initializer,
-                        bias_initializer=self._bias_initializer)
-        deco_l4_bn = BatchNormalization()
-        deco_l3 = Dense(self._intermediate_dim3, input_dim=self._intermediate_dim4,
-                        activation=self._activation, kernel_initializer=self._kernel_initializer,
-                        bias_initializer=self._bias_initializer)
-        deco_l3_bn = BatchNormalization()
-        deco_l2 = Dense(self._intermediate_dim2, input_dim=self._intermediate_dim3,
-                        activation=self._activation, kernel_initializer=self._kernel_initializer,
-                        bias_initializer=self._bias_initializer)
-        deco_l2_bn = BatchNormalization()
-        deco_l1 = Dense(self._intermediate_dim1, input_dim=self._intermediate_dim2,
-                        activation=self._activation, kernel_initializer=self._kernel_initializer,
-                        bias_initializer=self._bias_initializer)
-        deco_l1_bn = BatchNormalization()
-        x_reco = Dense(self._original_dim, activation=self._out_activation)
-        z_deco_input = Input(shape=(self.latent_dim + 4,))
-        x_reco_deco = x_reco(
-            (deco_l1_bn(deco_l1(deco_l2_bn(deco_l2(deco_l3_bn(deco_l3(deco_l4_bn(deco_l4(z_deco_input))))))))))
-        # This defines the decoder which takes an input of size latent dimension + condition size dimension and outputs
-        # the  reconstructed input version
-        self.decoder = Model(inputs=[z_deco_input], outputs=[x_reco_deco])
+        # Build encoder and decoder.
+        encoder = self._build_encoder()
+        decoder = self._build_decoder()
 
-        # This defines the reconstruction loss of the VAE model
-        def _reconstruction_loss(g4_event, vae_event):
-            return k.mean(self._original_dim * k.sum(metrics.binary_crossentropy(g4_event, vae_event)))
+        # Build VAE.
+        self.model = VAE(encoder, decoder)
 
-        # This defines the VAE model (encoder and decoder)
-        self.vae = Model(inputs=[x_in, e_cond, angle_cond, geo_cond, eps],
-                         outputs=[self.decoder(self.encoder([x_in, e_cond, angle_cond, geo_cond, eps]))])
-        self.vae.compile(optimizer=self._optimizer, loss=[_reconstruction_loss])
+        # Manufacture an optimizer and compile model with.
+        optimizer = OptimizerFactory.create_optimizer(optimizer_type, learning_rate)
+        self.model.compile(optimizer=optimizer)
 
-    # Training function
-    def train(self, train_set, e_cond, angle_cond, geo_cond, verbose=True):
+    def _prepare_input_layers(self, for_encoder: bool) -> Tuple[Input, Input, Input, Input]:
+        """
+        Create four Input layers. Each of them is responsible to take respectively: batch of showers/batch of latent
+        vectors, batch of energies, batch of angles, batch of geometries.
+
+        Args:
+            for_encoder: Boolean which decides whether an input is full dimensional shower or a latent vector.
+
+        Returns:
+            Tuple of four Input layers.
+
+        """
+        x_input = Input(shape=self._original_dim) if for_encoder else Input(shape=self.latent_dim)
+        e_input = Input(shape=(1,))
+        angle_input = Input(shape=(1,))
+        geo_input = Input(shape=(2,))
+        return x_input, e_input, angle_input, geo_input
+
+    def _build_encoder(self) -> Model:
+        """ Based on a list of intermediate dimensions, activation function and initializers for kernel and bias builds
+        the encoder.
+
+        Returns:
+             Encoder is returned as a keras.Model.
+
+        """
+
+        # Prepare input layer.
+        x_input, e_input, angle_input, geo_input = self._prepare_input_layers(for_encoder=True)
+        x = concatenate([x_input, e_input, angle_input, geo_input])
+        # Construct hidden layers (Dense and Batch Normalization).
+        for intermediate_dim in self._intermediate_dims:
+            x = Dense(units=intermediate_dim, activation=self._activation, kernel_initializer=self._kernel_initializer,
+                      bias_initializer=self._bias_initializer)(x)
+            x = BatchNormalization()(x)
+        # Add Dense layer to get description of multidimensional Gaussian distribution in terms of mean
+        # and log(variance).
+        z_mean = Dense(self.latent_dim, name="z_mean")(x)
+        z_log_var = Dense(self.latent_dim, name="z_log_var")(x)
+        # Sample a probe from the distribution.
+        z = _Sampling()([z_mean, z_log_var])
+        # Return model.
+        return Model(inputs=[x_input, e_input, angle_input, geo_input], outputs=[z_mean, z_log_var, z], name="encoder")
+
+    def _build_decoder(self) -> Model:
+        """ Based on a list of intermediate dimensions, activation function and initializers for kernel and bias builds
+        the decoder.
+
+        Returns:
+             Decoder is returned as a keras.Model.
+
+        """
+
+        # Prepare input layer.
+        latent_input, e_input, angle_input, geo_input = self._prepare_input_layers(for_encoder=False)
+        x = concatenate([latent_input, e_input, angle_input, geo_input])
+        # Construct hidden layers (Dense and Batch Normalization).
+        for intermediate_dim in reversed(self._intermediate_dims):
+            x = Dense(units=intermediate_dim, activation=self._activation, kernel_initializer=self._kernel_initializer,
+                      bias_initializer=self._bias_initializer)(x)
+            x = BatchNormalization()(x)
+        # Add Dense layer to get output which shape is compatible in an input's shape.
+        decoder_outputs = Dense(units=self._original_dim, activation=self._out_activation)(x)
+        # Return model.
+        return Model(inputs=[latent_input, e_input, angle_input, geo_input], outputs=decoder_outputs, name="decoder")
+
+    def _split_dataset_to_train_and_validation(self, dataset: np.array, e_cond: np.array, angle_cond: np.array,
+                                               geo_cond: np.array):
+        # TODO(@mdragula): consider to do K-Fold, and generally in a smarter way.
+        dataset_size, _ = dataset.shape
+        permutation = np.random.permutation(dataset_size)
+        split = int(dataset_size * self._validation_split)
+        train_idxs, val_idxs = permutation[split:], permutation[:split]
+
+        train_dataset = dataset[train_idxs, :]
+        train_e_cond = e_cond[train_idxs]
+        train_angle_cond = angle_cond[train_idxs]
+        train_geo_cond = geo_cond[train_idxs, :]
+
+        val_dataset = dataset[val_idxs, :]
+        val_e_cond = e_cond[val_idxs]
+        val_angle_cond = angle_cond[val_idxs]
+        val_geo_cond = geo_cond[val_idxs, :]
+
+        train_data = (train_dataset, train_e_cond, train_angle_cond, train_geo_cond)
+        val_data = (val_dataset, val_e_cond, val_angle_cond, val_geo_cond)
+
+        return train_data, val_data
+
+    def train(self, data_set: np.array, e_cond: np.array, angle_cond: np.array, geo_cond: np.array,
+              verbose: bool = True) -> History:
+        """
+        For a given input data trains and validates the model.
+
+        Args:
+            verbose:
+            data_set: A matrix representing showers. Shape =
+                (number of samples, ORIGINAL_DIM = N_CELLS_Z * N_CELLS_R * N_CELLS_PHI).
+            e_cond: A matrix representing an energy for each sample. Shape = (number of samples, ).
+            angle_cond: A matrix representing an angle for each sample. Shape = (number of samples, ).
+            geo_cond: A matrix representing a geometry of the detector for each sample. Shape = (number of samples, 2).
+            verbose: A boolean which says there the training should be performed in a verbose mode or not.
+
+        Returns:
+            A `History` object. Its `History.history` attribute is a record of training loss values and metrics values
+            at successive epochs, as well as validation loss values and validation metrics values (if applicable).
+
+        """
+
         # If the early stopping flag is on then stop the training when a monitored metric (validation) has stopped
         # improving after (patience) number of epochs
         if self._early_stop:
@@ -130,27 +262,16 @@ class VAE:
                                   verbose=0, save_best_only=False, save_weights_only=False,
                                   mode="min",
                                   save_freq=self._save_freq)
-        noise = np.random.normal(0, 1, size=(train_set.shape[0], self.latent_dim))
-        history = self.vae.fit([train_set, e_cond, angle_cond, geo_cond, noise], [train_set],
-                               shuffle=True,
-                               epochs=self._epochs,
-                               verbose=verbose,
-                               validation_split=self._validation_split,
-                               batch_size=self._batch_size,
-                               callbacks=[c_p]
-                               )
-        return history
 
-    # # Encode function uses only the encoder to generate the latent representation of an input
-    # def encode(self, dataSet):
-    #     return self.encoder.predict(dataSet, batch_size=self.batch_size)
-    # # Generate function uses only the decoder to generate new showers using the z_sample which is a vector of
-    # # ND Gaussians
-    # def generate(self, z_sample):
-    #     return self.decoder.predict([z_sample])
-    # # Predict function
-    # def predict(self, dataSet):
-    #     return self.vae.predict(dataSet, batch_size=self.batch_size)
-    # # Evaluate function
-    # def evaluate(self, dataSet):
-    #     return self.vae.evaluate(dataSet, batch_size=self.batch_size)
+        train_data, val_data = self._split_dataset_to_train_and_validation(data_set, e_cond, angle_cond, geo_cond)
+
+        # TODO(@mdragula): restore callbacks
+        history = self.model.fit(x=train_data,
+                                 shuffle=True,
+                                 epochs=EPOCHS,
+                                 verbose=verbose,
+                                 validation_data=(val_data, None),
+                                 batch_size=self._batch_size,
+                                 callbacks=[]
+                                 )
+        return history

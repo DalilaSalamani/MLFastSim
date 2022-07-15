@@ -9,7 +9,7 @@ import sys
 import keras2onnx
 
 from core.constants import CHECKPOINT_DIR
-from core.model import VAE
+from core.model import VAEHandler
 
 """
     epoch: epoch of the saved checkpoint model
@@ -30,13 +30,13 @@ def main(argv):
     args = parse_args(argv)
     epoch = args.epoch
     # Instantiate and load a saved model
-    vae = VAE()
+    vae = VAEHandler()
     # Load the saved weights
-    vae.vae.load_weights(f"{CHECKPOINT_DIR}VAE-{epoch}.h5")
+    vae.model.load_weights(f"{CHECKPOINT_DIR}VAE-{epoch}.h5")
 
     # 2. Convert the model to ONNX format
     # Create the Keras model and convert it into an ONNX model
-    keras_model = vae.decoder
+    keras_model = vae.model.decoder
     onnx_model = keras2onnx.convert_keras(keras_model, "name")
     # Save the ONNX model. Generator.onnx can then be used to perform the inference in the example
     keras2onnx.save_model(onnx_model, "Generator.onnx")

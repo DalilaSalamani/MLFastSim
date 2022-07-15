@@ -39,17 +39,14 @@ Model default parameters.
 BATCH_SIZE = 100
 # Total number of readout cells (represents the number of nodes in the input/output layers of the model).
 ORIGINAL_DIM = N_CELLS_Z * N_CELLS_R * N_CELLS_PHI
-INTERMEDIATE_DIM1 = 100
-INTERMEDIATE_DIM2 = 50
-INTERMEDIATE_DIM3 = 20
-INTERMEDIATE_DIM4 = 10 + 4
+INTERMEDIATE_DIMS = [100, 50, 20, 14]
 LATENT_DIM = 10
 EPOCHS = 10
 LEARNING_RATE = 0.001
 SAVE_FREQ = 100
 ACTIVATION = "relu"
 OUT_ACTIVATION = "sigmoid"
-VALIDATION_SPLIT = 0.05
+VALIDATION_SPLIT = 0.10
 OPTIMIZER_TYPE = OptimizerType.ADAM
 KERNEL_INITIALIZER = "RandomNormal"
 BIAS_INITIALIZER = "Zeros"
@@ -63,3 +60,5 @@ N_TRIALS = 5
 MAX_GPU_MEMORY_ALLOCATION = 8
 # ID of GPU used in a process
 GPU_ID = 0
+# Maximum size of a hidden layer
+MAX_HIDDEN_LAYER_DIM = 2000

@@ -9,7 +9,7 @@ from tensorflow.keras.metrics import Mean
 from tensorflow.keras.models import Model
 
 from core.constants import ORIGINAL_DIM, LATENT_DIM, BATCH_SIZE, EPOCHS, LEARNING_RATE, ACTIVATION, OUT_ACTIVATION, \
-    OPTIMIZER_TYPE, VALIDATION_SPLIT, KERNEL_INITIALIZER, CHECKPOINT_DIR, EARLY_STOP, BIAS_INITIALIZER, SAVE_FREQ, \
+    OPTIMIZER_TYPE, VALIDATION_SPLIT, KERNEL_INITIALIZER, CHECKPOINT_DIR, EARLY_STOP, BIAS_INITIALIZER, PERIOD, \
     INTERMEDIATE_DIMS, SAVE_MODEL, SAVE_BEST, PATIENCE, MIN_DELTA, BEST_MODEL_FILENAME
 from utils.optimizer import OptimizerFactory, OptimizerType
 
@@ -124,7 +124,7 @@ class VAEHandler:
                  optimizer_type: OptimizerType = OPTIMIZER_TYPE, kernel_initializer: str = KERNEL_INITIALIZER,
                  bias_initializer: str = BIAS_INITIALIZER, checkpoint_dir: str = CHECKPOINT_DIR,
                  early_stop: bool = EARLY_STOP, save_model: bool = SAVE_MODEL, save_best: bool = SAVE_BEST,
-                 save_freq: int = SAVE_FREQ, patience: int = PATIENCE, min_delta: float = MIN_DELTA,
+                 period: int = PERIOD, patience: int = PATIENCE, min_delta: float = MIN_DELTA,
                  best_model_filename: str = BEST_MODEL_FILENAME):
         self._best_model_filename = best_model_filename
         self._min_delta = min_delta
@@ -143,7 +143,7 @@ class VAEHandler:
         self._kernel_initializer = kernel_initializer
         self._checkpoint_dir = checkpoint_dir
         self._early_stop = early_stop
-        self._save_freq = save_freq
+        self._period = period
 
         # Build encoder and decoder.
         encoder = self._build_encoder()
@@ -276,7 +276,7 @@ class VAEHandler:
                               patience=self._patience,
                               verbose=True,
                               restore_best_weights=True))
-        # If the save model flag is on then save model every (self._save_freq) number of epochs regardless of
+        # If the save model flag is on then save model every (self._period) number of epochs regardless of
         # performance of the model.
         if self._save_model:
             callbacks.append(ModelCheckpoint(filepath=f"{self._checkpoint_dir}VAE-{{epoch:02d}}.tf",
@@ -284,7 +284,7 @@ class VAEHandler:
                                              verbose=True,
                                              save_weights_only=False,
                                              mode="min",
-                                             save_freq=self._save_freq))
+                                             period=self._period))
 
         train_data, val_data = self._split_dataset_to_train_and_validation(data_set, e_cond, angle_cond, geo_cond)
 

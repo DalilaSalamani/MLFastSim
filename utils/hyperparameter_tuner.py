@@ -176,7 +176,7 @@ class HyperparameterTuner:
                               verbose)
 
         # Return validation loss (currently it is treated as an objective goal).
-        validation_loss_history = history.history["val_total_loss"]
+        validation_loss_history = history.history["val_loss"]
         final_validation_loss = validation_loss_history[-1]
         return final_validation_loss
 

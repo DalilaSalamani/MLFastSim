@@ -7,7 +7,7 @@ from core.constants import MAX_GPU_MEMORY_ALLOCATION, GPU_ID
 from utils.hyperparameter_tuner import HyperparameterTuner
 
 # Hyperparemeters to be optimized.
-discrete_parameters = {"nb_hidden_layers": (1, 6)}
+discrete_parameters = {"nb_hidden_layers": (1, 6), "batch_size": (50, 200)}
 continuous_parameters = {"learning_rate": (0.0001, 0.01)}
 categorical_parameters = {}
 

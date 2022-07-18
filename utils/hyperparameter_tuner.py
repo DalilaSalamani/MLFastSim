@@ -16,6 +16,10 @@ from utils.preprocess import preprocess
 class HyperparameterTuner:
     """Tuner which looks for the best hyperparameters of a Variational Autoencoder specified in model.py.
 
+    Currently, supported hyperparameters are: dimension of latent space, number of hidden layers, learning rate,
+    activation function, activation function after the final layer, optimizer type, kernel initializer,
+    bias initializer, batch size.
+
     Attributes:
         _discrete_parameters: A dictionary of hyperparameters taking discrete values in the range [low, high].
         _continuous_parameters: A dictionary of hyperparameters taking continuous values in the range [low, high].
@@ -23,12 +27,22 @@ class HyperparameterTuner:
 
     """
 
+    def _check_hyperparameters(self):
+        available_hyperparameters = ["latent_dim", "nb_hidden_layers", "learning_rate", "activation", "out_activation",
+                                     "optimizer_type", "kernel_initializer", "bias_initializer", "batch_size"]
+        hyperparameters_to_be_optimized = list(self._discrete_parameters.keys()) + list(
+            self._continuous_parameters.keys()) + list(self._categorical_parameters.keys())
+        for hyperparameter_name in hyperparameters_to_be_optimized:
+            if hyperparameter_name not in available_hyperparameters:
+                raise Exception(f"Unknown hyperparameter: {hyperparameter_name}")
+
     def __init__(self, discrete_parameters: Dict[str, Tuple[int, int]],
                  continuous_parameters: Dict[str, Tuple[float, float]], categorical_parameters: Dict[str, List[Any]],
                  storage: str = None, study_name: str = None):
         self._discrete_parameters = discrete_parameters
         self._continuous_parameters = continuous_parameters
         self._categorical_parameters = categorical_parameters
+        self._check_hyperparameters()
         self._energies_train, self._cond_e_train, self._cond_angle_train, self._cond_geo_train = preprocess()
 
         if storage is not None and study_name is not None:
@@ -82,6 +96,13 @@ class HyperparameterTuner:
         else:
             intermediate_dims = INTERMEDIATE_DIMS
 
+        if "batch_size" in self._discrete_parameters.keys():
+            batch_size = trial.suggest_int(name="batch_size",
+                                           low=self._discrete_parameters["batch_size"][0],
+                                           high=self._discrete_parameters["batch_size"][0])
+        else:
+            batch_size = BATCH_SIZE
+
         # Continuous parameters
         if "learning_rate" in self._continuous_parameters.keys():
             learning_rate = trial.suggest_float(name="learning_rate",
@@ -121,7 +142,7 @@ class HyperparameterTuner:
         else:
             bias_initializer = BIAS_INITIALIZER
 
-        return VAEHandler(batch_size=BATCH_SIZE,
+        return VAEHandler(batch_size=batch_size,
                           original_dim=ORIGINAL_DIM,
                           intermediate_dims=intermediate_dims,
                           latent_dim=latent_dim,

@@ -6,9 +6,9 @@ import argparse
 
 import numpy as np
 
-from utils.preprocess import get_condition_arrays
 from core.constants import CHECKPOINT_DIR, GEN_DIR
-from core.model import VAE
+from core.model import VAEHandler
+from utils.preprocess import get_condition_arrays
 
 """
     - geometry : name of the calorimeter geometry (eg: SiW, SciPb)
@@ -42,11 +42,11 @@ def main():
     # 1. Get condition values
     cond_e, cond_angle, cond_geo = get_condition_arrays(geometry, energy_particle, nb_events)
     # 2. Load a saved model
-    vae = VAE()
+    vae = VAEHandler()
     # Load the saved weights
-    vae.vae.load_weights(f"{CHECKPOINT_DIR}VAE-{epoch}.h5")
+    vae.model.load_weights(f"{CHECKPOINT_DIR}VAE-{epoch}.h5")
     # The generator is defined as the decoder part only
-    generator = vae.decoder
+    generator = vae.model.decoder
     # 3. Generate showers using the VAE model by sampling from the prior (normal distribution) in d dimension
     # (d=latent_dim, latent space dimension)
     z_r = np.random.normal(loc=0, scale=1, size=(nb_events, vae.latent_dim))

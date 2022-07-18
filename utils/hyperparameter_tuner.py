@@ -6,9 +6,9 @@ from optuna import Trial, create_study, get_all_study_summaries, load_study
 from optuna.pruners import MedianPruner
 from optuna.trial import TrialState
 
-from core.constants import LEARNING_RATE, BATCH_SIZE, ORIGINAL_DIM, EPOCHS, ACTIVATION, OUT_ACTIVATION, \
-    VALIDATION_SPLIT, CHECKPOINT_DIR, OPTIMIZER_TYPE, KERNEL_INITIALIZER, BIAS_INITIALIZER, N_TRIALS, LATENT_DIM, \
-    SAVE_FREQ, INTERMEDIATE_DIMS, MAX_HIDDEN_LAYER_DIM
+from core.constants import LEARNING_RATE, BATCH_SIZE, ACTIVATION, OUT_ACTIVATION, \
+    OPTIMIZER_TYPE, KERNEL_INITIALIZER, BIAS_INITIALIZER, N_TRIALS, LATENT_DIM, \
+    INTERMEDIATE_DIMS, MAX_HIDDEN_LAYER_DIM
 from core.model import VAEHandler
 from utils.preprocess import preprocess
 
@@ -99,7 +99,7 @@ class HyperparameterTuner:
         if "batch_size" in self._discrete_parameters.keys():
             batch_size = trial.suggest_int(name="batch_size",
                                            low=self._discrete_parameters["batch_size"][0],
-                                           high=self._discrete_parameters["batch_size"][0])
+                                           high=self._discrete_parameters["batch_size"][1])
         else:
             batch_size = BATCH_SIZE
 
@@ -143,20 +143,17 @@ class HyperparameterTuner:
             bias_initializer = BIAS_INITIALIZER
 
         return VAEHandler(batch_size=batch_size,
-                          original_dim=ORIGINAL_DIM,
                           intermediate_dims=intermediate_dims,
                           latent_dim=latent_dim,
-                          epochs=EPOCHS,
                           learning_rate=learning_rate,
                           activation=activation,
                           out_activation=out_activation,
-                          validation_split=VALIDATION_SPLIT,
                           optimizer_type=optimizer_type,
                           kernel_initializer=kernel_initializer,
                           bias_initializer=bias_initializer,
                           early_stop=True,
-                          checkpoint_dir=CHECKPOINT_DIR,
-                          save_freq=SAVE_FREQ)
+                          save_best=True,
+                          best_model_filename=f"VAE-best-trial-{trial.number}.tf")
 
     def _objective(self, trial: Trial) -> float:
         """For a given trial trains the model and returns validation loss.
@@ -179,7 +176,7 @@ class HyperparameterTuner:
                               verbose)
 
         # Return validation loss (currently it is treated as an objective goal).
-        validation_loss_history = history.history["val_total_loss"]
+        validation_loss_history = history.history["val_loss"]
         final_validation_loss = validation_loss_history[-1]
         return final_validation_loss
 

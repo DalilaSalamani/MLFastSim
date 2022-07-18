@@ -9,8 +9,8 @@ from tensorflow.keras.metrics import Mean
 from tensorflow.keras.models import Model
 
 from core.constants import ORIGINAL_DIM, LATENT_DIM, BATCH_SIZE, EPOCHS, LEARNING_RATE, ACTIVATION, OUT_ACTIVATION, \
-    OPTIMIZER_TYPE, VALIDATION_SPLIT, KERNEL_INITIALIZER, CHECKPOINT_DIR, EARLY_STOP, BIAS_INITIALIZER, SAVE_FREQ, \
-    INTERMEDIATE_DIMS
+    OPTIMIZER_TYPE, VALIDATION_SPLIT, KERNEL_INITIALIZER, CHECKPOINT_DIR, EARLY_STOP, BIAS_INITIALIZER, PERIOD, \
+    INTERMEDIATE_DIMS, SAVE_MODEL, SAVE_BEST, PATIENCE, MIN_DELTA, BEST_MODEL_FILENAME
 from utils.optimizer import OptimizerFactory, OptimizerType
 
 
@@ -45,15 +45,21 @@ class _Reparametrize(Layer):
 
 class VAE(Model):
     def get_config(self):
-        raise NotImplementedError
+        config = super().get_config()
+        config["encoder"] = self.encoder
+        config["decoder"] = self.decoder
+        return config
 
     def call(self, inputs, training=None, mask=None):
-        raise Exception("It does not make sense to call VAE. You may want to call either encoder or decoder.")
+        _, e_input, angle_input, geo_input = inputs
+        z, _, _ = self.encoder(inputs)
+        return self.decoder([z, e_input, angle_input, geo_input])
 
     def __init__(self, encoder, decoder, **kwargs):
         super(VAE, self).__init__(**kwargs)
         self.encoder = encoder
         self.decoder = decoder
+        self._set_inputs(inputs=self.encoder.inputs, outputs=self(self.encoder.inputs))
         self.total_loss_tracker = Mean(name="total_loss")
         self.val_total_loss_tracker = Mean(name="val_total_loss")
 
@@ -69,6 +75,7 @@ class VAE(Model):
         # Reconstruct the original data.
         reconstruction = self.decoder([z, e_input, angle_input, geo_input])
 
+        # Reshape data.
         x_input = tf.expand_dims(x_input, -1)
         reconstruction = tf.expand_dims(reconstruction, -1)
 
@@ -116,7 +123,14 @@ class VAEHandler:
                  out_activation: str = OUT_ACTIVATION, validation_split: float = VALIDATION_SPLIT,
                  optimizer_type: OptimizerType = OPTIMIZER_TYPE, kernel_initializer: str = KERNEL_INITIALIZER,
                  bias_initializer: str = BIAS_INITIALIZER, checkpoint_dir: str = CHECKPOINT_DIR,
-                 early_stop: bool = EARLY_STOP, save_freq: int = SAVE_FREQ):
+                 early_stop: bool = EARLY_STOP, save_model: bool = SAVE_MODEL, save_best: bool = SAVE_BEST,
+                 period: int = PERIOD, patience: int = PATIENCE, min_delta: float = MIN_DELTA,
+                 best_model_filename: str = BEST_MODEL_FILENAME):
+        self._best_model_filename = best_model_filename
+        self._min_delta = min_delta
+        self._patience = patience
+        self._save_best = save_best
+        self._save_model = save_model
         self._original_dim = original_dim
         self.latent_dim = latent_dim
         self._intermediate_dims = intermediate_dims
@@ -129,7 +143,7 @@ class VAEHandler:
         self._kernel_initializer = kernel_initializer
         self._checkpoint_dir = checkpoint_dir
         self._early_stop = early_stop
-        self._save_freq = save_freq
+        self._period = period
 
         # Build encoder and decoder.
         encoder = self._build_encoder()
@@ -140,7 +154,8 @@ class VAEHandler:
 
         # Manufacture an optimizer and compile model with.
         optimizer = OptimizerFactory.create_optimizer(optimizer_type, learning_rate)
-        self.model.compile(optimizer=optimizer)
+        self.model.compile(optimizer=optimizer,
+                           metrics=[self.model.total_loss_tracker, self.model.val_total_loss_tracker])
 
     def _prepare_input_layers(self, for_encoder: bool) -> Tuple[Input, Input, Input, Input]:
         """
@@ -252,26 +267,38 @@ class VAEHandler:
         """
 
         # If the early stopping flag is on then stop the training when a monitored metric (validation) has stopped
-        # improving after (patience) number of epochs
+        # improving after (patience) number of epochs.
+        callbacks = []
         if self._early_stop:
-            c_p = EarlyStopping(monitor="val_loss", min_delta=0.01, patience=5, verbose=1)
-        # If the early stopping flag is off then run the training for the number of epochs and save the model
-        # every (save_freq) epochs
-        else:
-            c_p = ModelCheckpoint(f"{self._checkpoint_dir}VAE-{{epoch:02d}}.h5", monitor="val_loss",
-                                  verbose=0, save_best_only=False, save_weights_only=False,
-                                  mode="min",
-                                  save_freq=self._save_freq)
+            callbacks.append(
+                EarlyStopping(monitor="val_total_loss",
+                              min_delta=self._min_delta,
+                              patience=self._patience,
+                              verbose=True,
+                              restore_best_weights=True))
+        # If the save model flag is on then save model every (self._period) number of epochs regardless of
+        # performance of the model.
+        if self._save_model:
+            callbacks.append(ModelCheckpoint(filepath=f"{self._checkpoint_dir}VAE-{{epoch:02d}}.tf",
+                                             monitor="val_total_loss",
+                                             verbose=True,
+                                             save_weights_only=False,
+                                             mode="min",
+                                             period=self._period))
 
         train_data, val_data = self._split_dataset_to_train_and_validation(data_set, e_cond, angle_cond, geo_cond)
 
-        # TODO(@mdragula): restore callbacks
         history = self.model.fit(x=train_data,
                                  shuffle=True,
                                  epochs=EPOCHS,
                                  verbose=verbose,
                                  validation_data=(val_data, None),
                                  batch_size=self._batch_size,
-                                 callbacks=[]
+                                 callbacks=callbacks
                                  )
+
+        if self._save_best:
+            self.model.save(self._checkpoint_dir + self._best_model_filename)
+            print("Best model was saved.")
+
         return history

@@ -308,7 +308,7 @@ class VAEHandler:
 
             history = self.model.fit(x=train_data,
                                      shuffle=True,
-                                     epochs=EPOCHS,
+                                     epochs=self._epochs,
                                      verbose=verbose,
                                      validation_data=(val_data, None),
                                      batch_size=self._batch_size,
@@ -352,7 +352,7 @@ class VAEHandler:
                                                        validation_indexes)
         history = self.model.fit(x=train_data,
                                  shuffle=True,
-                                 epochs=EPOCHS,
+                                 epochs=self._epochs,
                                  verbose=verbose,
                                  validation_data=(val_data, None),
                                  batch_size=self._batch_size,

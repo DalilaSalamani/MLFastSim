@@ -1,7 +1,8 @@
-from typing import Tuple, Dict, Any, List
+from typing import Tuple, Dict, Any, List, Union
 
 import numpy as np
 import tensorflow as tf
+from numpy import ndarray
 from optuna import Trial, create_study, get_all_study_summaries, load_study
 from optuna.pruners import MedianPruner
 from optuna.trial import TrialState
@@ -172,13 +173,13 @@ class HyperparameterTuner:
 
         # Train the model.
         verbose = True
-        history = model.train(self._energies_train, self._cond_e_train, self._cond_angle_train, self._cond_geo_train,
-                              verbose)
+        histories = model.train(self._energies_train, self._cond_e_train, self._cond_angle_train, self._cond_geo_train,
+                                verbose)
 
         # Return validation loss (currently it is treated as an objective goal).
-        validation_loss_history = history.history["val_loss"]
-        final_validation_loss = validation_loss_history[-1]
-        return final_validation_loss
+        final_validation_losses = [np.min(history.history["val_total_loss"]) for history in histories]
+        avg_validation_loss = np.mean(final_validation_losses).item()
+        return avg_validation_loss
 
     def tune(self) -> None:
         """Main tuning function.

@@ -5,7 +5,7 @@ creates validation plots using shower observables
 
 import argparse
 
-from core.constants import VALID_DIR, INIT_DIR, GEN_DIR, N_CELLS_PHI
+from core.constants import VALID_DIR, INIT_DIR, GEN_DIR, N_CELLS_R, N_CELLS_PHI, N_CELLS_Z,
 from utils.observables import *
 from utils.preprocess import load_showers
 
@@ -35,34 +35,44 @@ def main():
     geometry = args.geometry
     # 1. Full simulation data loading
     # Load energy of showers from a single geometry, energy and angle
-    e_layer_g4 = load_showers(INIT_DIR, geometry, energy_particle, angle_particle)
+    e_layer_g4 = load_showers(INIT_DIR, geometry, energy_particle,
+                              angle_particle)
     valid_dir = VALID_DIR
     # 2. Fast simulation data loading, scaling to original energy range & reshaping
     vae_energies = np.loadtxt(
-        f"{GEN_DIR}VAE_Generated_Geo_{geometry}_E_{energy_particle}_Angle_{angle_particle}.txt") * (
-                           energy_particle * 1000)
+        f"{GEN_DIR}VAE_Generated_Geo_{geometry}_E_{energy_particle}_Angle_{angle_particle}.txt"
+    ) * (energy_particle * 1000)
     # Reshape the events into 3D
-    e_layer_vae = vae_energies.reshape(len(vae_energies), N_CELLS_R, N_CELLS_PHI, N_CELLS_Z)
+    e_layer_vae = vae_energies.reshape(len(vae_energies), N_CELLS_R,
+                                       N_CELLS_PHI, N_CELLS_Z)
     # 3. Plot observables
     lp_g4 = []
     lp_vae = []
     tp_g4 = []
     tp_vae = []
     for i in range(N_CELLS_Z):
-        lp_g4.append(np.sum(np.array([np.sum(i) for i in e_layer_g4[:, :, :, i]])))
-        lp_vae.append(np.sum(np.array([np.sum(i) for i in e_layer_vae[:, :, :, i]])))
+        lp_g4.append(
+            np.sum(np.array([np.sum(i) for i in e_layer_g4[:, :, :, i]])))
+        lp_vae.append(
+            np.sum(np.array([np.sum(i) for i in e_layer_vae[:, :, :, i]])))
     for i in range(N_CELLS_R):
-        tp_g4.append(np.sum(np.array([np.sum(i) for i in e_layer_g4[:, i, :, :]])))
-        tp_vae.append(np.sum(np.array([np.sum(i) for i in e_layer_vae[:, i, :, :]])))
-    longitudinal_profile(lp_g4, lp_vae, energy_particle, angle_particle, geometry, valid_dir)
-    lateral_profile(tp_g4, tp_vae, energy_particle, angle_particle, geometry, valid_dir)
+        tp_g4.append(
+            np.sum(np.array([np.sum(i) for i in e_layer_g4[:, i, :, :]])))
+        tp_vae.append(
+            np.sum(np.array([np.sum(i) for i in e_layer_vae[:, i, :, :]])))
+    longitudinal_profile(lp_g4, lp_vae, energy_particle, angle_particle,
+                         geometry, valid_dir)
+    lateral_profile(tp_g4, tp_vae, energy_particle, angle_particle, geometry,
+                    valid_dir)
     g4 = e_layer_g4.reshape(len(e_layer_g4), 40500)
     vae = e_layer_vae.reshape(len(e_layer_vae), 40500)
     sum_g4 = np.array([np.sum(i) for i in g4])
     sum_vae = np.array([np.sum(i) for i in vae])
-    e_tot(sum_g4, sum_vae, energy_particle, angle_particle, geometry, valid_dir)
+    e_tot(sum_g4, sum_vae, energy_particle, angle_particle, geometry,
+          valid_dir)
     cell_energy(g4, vae, energy_particle, angle_particle, geometry, valid_dir)
-    energy_layer(e_layer_g4.reshape(len(e_layer_g4), 18, 50, 5, 9), e_layer_vae.reshape(len(e_layer_vae), 18, 50, 5, 9),
+    energy_layer(e_layer_g4.reshape(len(e_layer_g4), 18, 50, 5, 9),
+                 e_layer_vae.reshape(len(e_layer_vae), 18, 50, 5, 9),
                  energy_particle, angle_particle, geometry, valid_dir)
     z_ids = np.arange(N_CELLS_Z)
     r_ids = np.arange(N_CELLS_R)
@@ -70,17 +80,59 @@ def main():
     fml_vae = []
     fmt_g4 = []
     fmt_vae = []
+    sml_g4 = []
+    sml_vae = []
+    smt_g4 = []
+    smt_vae = []
     for s_id in range(len(e_layer_g4)):
+        # Longitudinal variables
         e_g4 = [np.sum(e_layer_g4[s_id, :, :, i]) for i in range(N_CELLS_Z)]
-        fml_g4.append(np.sum([z_ids[i] * SIZE_Z * e_g4[i] for i in range(N_CELLS_Z)]) / sum_g4[s_id])
+        first = np.sum([z_ids[i] * SIZE_Z * e_g4[i]
+                        for i in range(N_CELLS_Z)]) / sum_g4[s_id]
+        fml_g4.append(first)
+        sml_g4.append(
+            np.sum([
+                pow(z_ids[i] * SIZE_Z - first, 2) * e_g4[i]
+                for i in range(N_CELLS_Z)
+            ]) / sum_g4[s_id])
         e_vae = [np.sum(e_layer_vae[s_id, :, :, i]) for i in range(N_CELLS_Z)]
-        fml_vae.append(np.sum([z_ids[i] * SIZE_Z * e_vae[i] for i in range(N_CELLS_Z)]) / sum_vae[s_id])
+        first = np.sum(
+            [z_ids[i] * SIZE_Z * e_vae[i]
+             for i in range(N_CELLS_Z)]) / sum_vae[s_id]
+        fml_vae.append(first)
+        sml_vae.append(
+            np.sum([
+                pow(z_ids[i] * SIZE_Z - first, 2) * e_vae[i]
+                for i in range(N_CELLS_Z)
+            ]) / sum_vae[s_id])
+        # Transverse/Lateral variables
         e_g4 = [np.sum(e_layer_g4[s_id, i, :, :]) for i in range(N_CELLS_R)]
-        fmt_g4.append(np.sum([r_ids[i] * SIZE_R * e_g4[i] for i in range(N_CELLS_R)]) / sum_g4[s_id])
+        first = np.sum([r_ids[i] * SIZE_R * e_g4[i]
+                        for i in range(N_CELLS_R)]) / sum_g4[s_id]
+        fmt_g4.append(first)
+        smt_g4.append(
+            np.sum([
+                pow(r_ids[i] * SIZE_R - first, 2) * e_g4[i]
+                for i in range(N_CELLS_R)
+            ]) / sum_g4[s_id])
         e_vae = [np.sum(e_layer_vae[s_id, i, :, :]) for i in range(N_CELLS_R)]
-        fmt_vae.append(np.sum([r_ids[i] * SIZE_R * e_vae[i] for i in range(N_CELLS_R)]) / sum_vae[s_id])
-    longitudinal_first_moment(fml_g4, fml_vae, energy_particle, angle_particle, geometry, valid_dir)
-    lateral_first_moment(fmt_g4, fmt_vae, energy_particle, angle_particle, geometry, valid_dir)
+        first = np.sum(
+            [r_ids[i] * SIZE_R * e_vae[i]
+             for i in range(N_CELLS_R)]) / sum_vae[s_id]
+        fmt_vae.append(first)
+        smt_g4.append(
+            np.sum([
+                pow(r_ids[i] * SIZE_R - first, 2) * e_vae[i]
+                for i in range(N_CELLS_R)
+            ]) / sum_vae[s_id])
+    longitudinal_first_moment(fml_g4, fml_vae, energy_particle, angle_particle,
+                              geometry, valid_dir)
+    lateral_first_moment(fmt_g4, fmt_vae, energy_particle, angle_particle,
+                         geometry, valid_dir)
+    longitudinal_second_moment(sml_g4, sml_vae, energy_particle,
+                               angle_particle, geometry, valid_dir)
+    lateral_second_moment(smt_g4, smt_vae, energy_particle, angle_particle,
+                          geometry, valid_dir)
 
 
 if __name__ == "__main__":

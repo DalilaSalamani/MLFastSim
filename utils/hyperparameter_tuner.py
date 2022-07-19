@@ -153,16 +153,17 @@ class HyperparameterTuner:
                           bias_initializer=bias_initializer,
                           early_stop=True,
                           save_best=True,
-                          best_model_filename=f"VAE-best-trial-{trial.number}.tf")
+                          best_model_filename=f"VAE_best_trial_{trial.number}.tf")
 
     def _objective(self, trial: Trial) -> float:
-        """For a given trial trains the model and returns validation loss.
+        """For a given trial trains the model and returns an average validation loss.
 
         Args:
             trial: Optuna's trial
 
-        Returns:
-            One float numer which is a validation loss calculated on 5% unseen before elements of the dataset.
+        Returns: One float numer which is a validation loss. It can be either calculated as an average of k trainings
+        performed in cross validation mode or is one number obtained from  validation on unseen before, some fraction
+        of the dataset.
         """
 
         tf.keras.backend.clear_session()
@@ -172,13 +173,14 @@ class HyperparameterTuner:
 
         # Train the model.
         verbose = True
-        history = model.train(self._energies_train, self._cond_e_train, self._cond_angle_train, self._cond_geo_train,
-                              verbose)
+        histories = model.train(self._energies_train, self._cond_e_train, self._cond_angle_train, self._cond_geo_train,
+                                verbose)
 
-        # Return validation loss (currently it is treated as an objective goal).
-        validation_loss_history = history.history["val_loss"]
-        final_validation_loss = validation_loss_history[-1]
-        return final_validation_loss
+        # Return validation loss (currently it is treated as an objective goal). Notice that we take into account the
+        # best model according to the validation loss.
+        final_validation_losses = [np.min(history.history["val_total_loss"]) for history in histories]
+        avg_validation_loss = np.mean(final_validation_losses).item()
+        return avg_validation_loss
 
     def tune(self) -> None:
         """Main tuning function.

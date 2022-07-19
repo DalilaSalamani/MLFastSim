@@ -2,15 +2,17 @@ from typing import List, Any, Dict, Tuple
 
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, History
+from sklearn.model_selection import KFold
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, History, Callback
 from tensorflow.keras.layers import BatchNormalization, Input, Dense, Layer, concatenate
 from tensorflow.keras.losses import binary_crossentropy
 from tensorflow.keras.metrics import Mean
 from tensorflow.keras.models import Model
 
 from core.constants import ORIGINAL_DIM, LATENT_DIM, BATCH_SIZE, EPOCHS, LEARNING_RATE, ACTIVATION, OUT_ACTIVATION, \
-    OPTIMIZER_TYPE, VALIDATION_SPLIT, KERNEL_INITIALIZER, CHECKPOINT_DIR, EARLY_STOP, BIAS_INITIALIZER, PERIOD, \
-    INTERMEDIATE_DIMS, SAVE_MODEL, SAVE_BEST, PATIENCE, MIN_DELTA, BEST_MODEL_FILENAME
+    OPTIMIZER_TYPE, KERNEL_INITIALIZER, CHECKPOINT_DIR, EARLY_STOP, BIAS_INITIALIZER, PERIOD, \
+    INTERMEDIATE_DIMS, SAVE_MODEL, SAVE_BEST, PATIENCE, MIN_DELTA, BEST_MODEL_FILENAME, NUMBER_OF_K_FOLD_SPLITS, \
+    VALIDATION_SPLIT
 from utils.optimizer import OptimizerFactory, OptimizerType
 
 
@@ -112,6 +114,28 @@ class VAE(Model):
         return {"total_loss": self.val_total_loss_tracker.result()}
 
 
+def _get_train_and_val_data(dataset: np.array, e_cond: np.array, angle_cond: np.array, geo_cond: np.array,
+                            train_indexes: np.array, validation_indexes: np.array) -> List[List[np.array]]:
+    """
+    Splits data into train and validation set based on given lists of indexes.
+
+    """
+    train_dataset = dataset[train_indexes, :]
+    train_e_cond = e_cond[train_indexes]
+    train_angle_cond = angle_cond[train_indexes]
+    train_geo_cond = geo_cond[train_indexes, :]
+
+    val_dataset = dataset[validation_indexes, :]
+    val_e_cond = e_cond[validation_indexes]
+    val_angle_cond = angle_cond[validation_indexes]
+    val_geo_cond = geo_cond[validation_indexes, :]
+
+    train_data = [train_dataset, train_e_cond, train_angle_cond, train_geo_cond]
+    val_data = [val_dataset, val_e_cond, val_angle_cond, val_geo_cond]
+
+    return [train_data, val_data]
+
+
 class VAEHandler:
     """
     Class to handle building and training VAE models.
@@ -120,12 +144,13 @@ class VAEHandler:
     def __init__(self, original_dim: int = ORIGINAL_DIM, latent_dim: int = LATENT_DIM, batch_size: int = BATCH_SIZE,
                  intermediate_dims: List[int] = INTERMEDIATE_DIMS,
                  learning_rate: float = LEARNING_RATE, epochs: int = EPOCHS, activation: str = ACTIVATION,
-                 out_activation: str = OUT_ACTIVATION, validation_split: float = VALIDATION_SPLIT,
+                 out_activation: str = OUT_ACTIVATION, number_of_k_fold_splits: float = NUMBER_OF_K_FOLD_SPLITS,
                  optimizer_type: OptimizerType = OPTIMIZER_TYPE, kernel_initializer: str = KERNEL_INITIALIZER,
                  bias_initializer: str = BIAS_INITIALIZER, checkpoint_dir: str = CHECKPOINT_DIR,
                  early_stop: bool = EARLY_STOP, save_model: bool = SAVE_MODEL, save_best: bool = SAVE_BEST,
                  period: int = PERIOD, patience: int = PATIENCE, min_delta: float = MIN_DELTA,
-                 best_model_filename: str = BEST_MODEL_FILENAME):
+                 best_model_filename: str = BEST_MODEL_FILENAME, validation_split: float = VALIDATION_SPLIT):
+        self._validation_split = validation_split
         self._best_model_filename = best_model_filename
         self._min_delta = min_delta
         self._patience = patience
@@ -138,7 +163,7 @@ class VAEHandler:
         self._epochs = epochs
         self._activation = activation
         self._out_activation = out_activation
-        self._validation_split = validation_split
+        self._number_of_k_fold_splits = number_of_k_fold_splits
         self._bias_initializer = bias_initializer
         self._kernel_initializer = kernel_initializer
         self._checkpoint_dir = checkpoint_dir
@@ -223,49 +248,14 @@ class VAEHandler:
         # Return model.
         return Model(inputs=[latent_input, e_input, angle_input, geo_input], outputs=decoder_outputs, name="decoder")
 
-    def _split_dataset_to_train_and_validation(self, dataset: np.array, e_cond: np.array, angle_cond: np.array,
-                                               geo_cond: np.array):
-        # TODO(@mdragula): consider to do K-Fold, and generally in a smarter way.
-        dataset_size, _ = dataset.shape
-        permutation = np.random.permutation(dataset_size)
-        split = int(dataset_size * self._validation_split)
-        train_idxs, val_idxs = permutation[split:], permutation[:split]
-
-        train_dataset = dataset[train_idxs, :]
-        train_e_cond = e_cond[train_idxs]
-        train_angle_cond = angle_cond[train_idxs]
-        train_geo_cond = geo_cond[train_idxs, :]
-
-        val_dataset = dataset[val_idxs, :]
-        val_e_cond = e_cond[val_idxs]
-        val_angle_cond = angle_cond[val_idxs]
-        val_geo_cond = geo_cond[val_idxs, :]
-
-        train_data = (train_dataset, train_e_cond, train_angle_cond, train_geo_cond)
-        val_data = (val_dataset, val_e_cond, val_angle_cond, val_geo_cond)
-
-        return train_data, val_data
-
-    def train(self, data_set: np.array, e_cond: np.array, angle_cond: np.array, geo_cond: np.array,
-              verbose: bool = True) -> History:
+    def _manufacture_callbacks(self) -> List[Callback]:
         """
-        For a given input data trains and validates the model.
-
-        Args:
-            verbose:
-            data_set: A matrix representing showers. Shape =
-                (number of samples, ORIGINAL_DIM = N_CELLS_Z * N_CELLS_R * N_CELLS_PHI).
-            e_cond: A matrix representing an energy for each sample. Shape = (number of samples, ).
-            angle_cond: A matrix representing an angle for each sample. Shape = (number of samples, ).
-            geo_cond: A matrix representing a geometry of the detector for each sample. Shape = (number of samples, 2).
-            verbose: A boolean which says there the training should be performed in a verbose mode or not.
+        Based on parameters set by the user, manufacture callbacks required for training.
 
         Returns:
-            A `History` object. Its `History.history` attribute is a record of training loss values and metrics values
-            at successive epochs, as well as validation loss values and validation metrics values (if applicable).
+            A list of `Callback` objects.
 
         """
-
         # If the early stopping flag is on then stop the training when a monitored metric (validation) has stopped
         # improving after (patience) number of epochs.
         callbacks = []
@@ -285,20 +275,120 @@ class VAEHandler:
                                              save_weights_only=False,
                                              mode="min",
                                              period=self._period))
+        return callbacks
 
-        train_data, val_data = self._split_dataset_to_train_and_validation(data_set, e_cond, angle_cond, geo_cond)
+    def _k_fold_training(self, dataset: np.array, e_cond: np.array, angle_cond: np.array, geo_cond: np.array,
+                         callbacks: List[Callback], verbose: bool = True) -> List[History]:
+        """
+        Performs K-fold cross validation training.
 
+        Number of fold is defined by (self._number_of_k_fold_splits). Always shuffle the dataset.
+
+        Args:
+            dataset: A matrix representing showers. Shape =
+                (number of samples, ORIGINAL_DIM = N_CELLS_Z * N_CELLS_R * N_CELLS_PHI).
+            e_cond: A matrix representing an energy for each sample. Shape = (number of samples, ).
+            angle_cond: A matrix representing an angle for each sample. Shape = (number of samples, ).
+            geo_cond: A matrix representing a geometry of the detector for each sample. Shape = (number of samples, 2).
+            callbacks: A list of callback forwarded to the fitting function.
+            verbose: A boolean which says there the training should be performed in a verbose mode or not.
+
+        Returns: A list of `History` objects.`History.history` attribute is a record of training loss values and
+        metrics values at successive epochs, as well as validation loss values and validation metrics values (if
+        applicable).
+
+        """
+        k_fold = KFold(n_splits=self._number_of_k_fold_splits, shuffle=True)
+        histories = []
+
+        for i, (train_indexes, validation_indexes) in enumerate(k_fold.split(dataset)):
+            print(f"K-fold: {i + 1}/{self._number_of_k_fold_splits}...")
+            train_data, val_data = _get_train_and_val_data(dataset, e_cond, angle_cond, geo_cond, train_indexes,
+                                                           validation_indexes)
+
+            history = self.model.fit(x=train_data,
+                                     shuffle=True,
+                                     epochs=self._epochs,
+                                     verbose=verbose,
+                                     validation_data=(val_data, None),
+                                     batch_size=self._batch_size,
+                                     callbacks=callbacks
+                                     )
+            histories.append(history)
+
+            if self._save_best:
+                self.model.save(f"{self._checkpoint_dir}{self._best_model_filename}_{i}.tf")
+                print("Best model was saved.")
+
+        return histories
+
+    def _single_training(self, dataset: np.array, e_cond: np.array, angle_cond: np.array, geo_cond: np.array,
+                         callbacks: List[Callback], verbose: bool = True) -> List[History]:
+        """
+        Performs a single training.
+
+        A fraction of dataset (self._validation_split) is used as a validation data.
+
+        Args:
+            dataset: A matrix representing showers. Shape =
+                (number of samples, ORIGINAL_DIM = N_CELLS_Z * N_CELLS_R * N_CELLS_PHI).
+            e_cond: A matrix representing an energy for each sample. Shape = (number of samples, ).
+            angle_cond: A matrix representing an angle for each sample. Shape = (number of samples, ).
+            geo_cond: A matrix representing a geometry of the detector for each sample. Shape = (number of samples, 2).
+            callbacks: A list of callback forwarded to the fitting function.
+            verbose: A boolean which says there the training should be performed in a verbose mode or not.
+
+        Returns: A one-element list of `History` objects.`History.history` attribute is a record of training loss
+        values and metrics values at successive epochs, as well as validation loss values and validation metrics
+        values (if applicable).
+
+        """
+        dataset_size, _ = dataset.shape
+        permutation = np.random.permutation(dataset_size)
+        split = int(dataset_size * self._validation_split)
+        train_indexes, validation_indexes = permutation[split:], permutation[:split]
+
+        train_data, val_data = _get_train_and_val_data(dataset, e_cond, angle_cond, geo_cond, train_indexes,
+                                                       validation_indexes)
         history = self.model.fit(x=train_data,
                                  shuffle=True,
-                                 epochs=EPOCHS,
+                                 epochs=self._epochs,
                                  verbose=verbose,
                                  validation_data=(val_data, None),
                                  batch_size=self._batch_size,
                                  callbacks=callbacks
                                  )
-
         if self._save_best:
-            self.model.save(self._checkpoint_dir + self._best_model_filename)
+            self.model.save(f"{self._checkpoint_dir}{self._best_model_filename}.tf")
             print("Best model was saved.")
 
-        return history
+        return [history]
+
+    def train(self, dataset: np.array, e_cond: np.array, angle_cond: np.array, geo_cond: np.array,
+              verbose: bool = True) -> List[History]:
+        """
+        For a given input data trains and validates the model.
+
+        If the numer of K-fold splits > 1 then it runs K-fold cross validation, otherwise it runs a single training
+        which uses (self._validation_split * 100) % of dataset as a validation data.
+
+        Args:
+            dataset: A matrix representing showers. Shape =
+                (number of samples, ORIGINAL_DIM = N_CELLS_Z * N_CELLS_R * N_CELLS_PHI).
+            e_cond: A matrix representing an energy for each sample. Shape = (number of samples, ).
+            angle_cond: A matrix representing an angle for each sample. Shape = (number of samples, ).
+            geo_cond: A matrix representing a geometry of the detector for each sample. Shape = (number of samples, 2).
+            verbose: A boolean which says there the training should be performed in a verbose mode or not.
+
+        Returns: A list of `History` objects.`History.history` attribute is a record of training loss values and
+        metrics values at successive epochs, as well as validation loss values and validation metrics values (if
+        applicable).
+
+        """
+
+        callbacks = self._manufacture_callbacks()
+
+        if self._number_of_k_fold_splits > 1:
+            return self._k_fold_training(dataset, e_cond, angle_cond, geo_cond, callbacks, verbose)
+        else:
+            return self._single_training(dataset, e_cond, angle_cond, geo_cond, callbacks, verbose)

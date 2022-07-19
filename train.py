@@ -11,10 +11,11 @@ energies_train, cond_e_train, cond_angle_train, cond_geo_train = preprocess()
 vae = VAEHandler()
 
 # 3. Model training
-history = vae.train(energies_train,
-                    cond_e_train,
-                    cond_angle_train,
-                    cond_geo_train
-                    )
+histories = vae.train(energies_train,
+                      cond_e_train,
+                      cond_angle_train,
+                      cond_geo_train
+                      )
 
-# Note : the history object can be used to plot the loss evaluation as function of the epochs.
+# Note : One history object can be used to plot the loss evaluation as function of the epochs. Remember that the
+# function returns a list of those objects. Each of them represents a different fold of cross validation.

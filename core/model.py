@@ -1,3 +1,5 @@
+from dataclasses import dataclass, field
+from dataclasses import dataclass, field
 from typing import List, Any, Dict, Tuple
 
 import numpy as np
@@ -8,11 +10,15 @@ from tensorflow.keras.layers import BatchNormalization, Input, Dense, Layer, con
 from tensorflow.keras.losses import binary_crossentropy
 from tensorflow.keras.metrics import Mean
 from tensorflow.keras.models import Model
+from tensorflow.python.data import Dataset
+from tensorflow.python.distribute.distribute_lib import Strategy
+from tensorflow.python.distribute.mirrored_strategy import MirroredStrategy
 
-from core.constants import ORIGINAL_DIM, LATENT_DIM, BATCH_SIZE, EPOCHS, LEARNING_RATE, ACTIVATION, OUT_ACTIVATION, \
+from core.constants import ORIGINAL_DIM, LATENT_DIM, BATCH_SIZE_PER_REPLICA, EPOCHS, LEARNING_RATE, ACTIVATION, \
+    OUT_ACTIVATION, \
     OPTIMIZER_TYPE, KERNEL_INITIALIZER, CHECKPOINT_DIR, EARLY_STOP, BIAS_INITIALIZER, PERIOD, \
     INTERMEDIATE_DIMS, SAVE_MODEL, SAVE_BEST, PATIENCE, MIN_DELTA, BEST_MODEL_FILENAME, NUMBER_OF_K_FOLD_SPLITS, \
-    VALIDATION_SPLIT
+    VALIDATION_SPLIT, GPU_IDS, MAX_GPU_MEMORY_ALLOCATION, BUFFER_SIZE
 from utils.optimizer import OptimizerFactory, OptimizerType
 
 
@@ -23,7 +29,7 @@ class _Sampling(Layer):
     The sampled vector z is given by sampled_z = mean + std * epsilon
     """
 
-    def call(self, inputs, **kwargs):
+    def __call__(self, inputs, **kwargs):
         z_mean, z_log_var = inputs
         z_sigma = tf.math.exp(0.5 * z_log_var)
         epsilon = tf.random.normal(tf.shape(z_sigma))
@@ -38,7 +44,7 @@ class _Reparametrize(Layer):
     The sampled vector z is given by sampled_z = mean + std * epsilon
     """
 
-    def call(self, inputs, **kwargs):
+    def __call__(self, inputs, **kwargs):
         z_mean, z_log_var = inputs
         z_sigma = tf.math.exp(0.5 * z_log_var)
         epsilon = tf.random.normal(tf.shape(z_sigma))
@@ -71,7 +77,7 @@ class VAE(Model):
 
     def _perform_step(self, data: Any) -> Tuple[float, float, float]:
         # Unpack data.
-        ([x_input, e_input, angle_input, geo_input],) = data
+        x_input, e_input, angle_input, geo_input = data
         # Encode data and get new probability distribution with a vector z sampled from it.
         z_mean, z_log_var, z = self.encoder([x_input, e_input, angle_input, geo_input])
         # Reconstruct the original data.
@@ -114,73 +120,52 @@ class VAE(Model):
         return {"total_loss": self.val_total_loss_tracker.result()}
 
 
-def _get_train_and_val_data(dataset: np.array, e_cond: np.array, angle_cond: np.array, geo_cond: np.array,
-                            train_indexes: np.array, validation_indexes: np.array) -> List[List[np.array]]:
-    """
-    Splits data into train and validation set based on given lists of indexes.
-
-    """
-    train_dataset = dataset[train_indexes, :]
-    train_e_cond = e_cond[train_indexes]
-    train_angle_cond = angle_cond[train_indexes]
-    train_geo_cond = geo_cond[train_indexes, :]
-
-    val_dataset = dataset[validation_indexes, :]
-    val_e_cond = e_cond[validation_indexes]
-    val_angle_cond = angle_cond[validation_indexes]
-    val_geo_cond = geo_cond[validation_indexes, :]
-
-    train_data = [train_dataset, train_e_cond, train_angle_cond, train_geo_cond]
-    val_data = [val_dataset, val_e_cond, val_angle_cond, val_geo_cond]
-
-    return [train_data, val_data]
-
-
+@dataclass
 class VAEHandler:
     """
     Class to handle building and training VAE models.
     """
+    _original_dim: int = ORIGINAL_DIM
+    latent_dim: int = LATENT_DIM
+    _batch_size_per_replica: int = BATCH_SIZE_PER_REPLICA
+    _intermediate_dims: List[int] = field(default_factory=lambda: INTERMEDIATE_DIMS)
+    _learning_rate: float = LEARNING_RATE
+    _epochs: int = EPOCHS
+    _activation: str = ACTIVATION
+    _out_activation: str = OUT_ACTIVATION
+    _number_of_k_fold_splits: float = NUMBER_OF_K_FOLD_SPLITS
+    _optimizer_type: OptimizerType = OPTIMIZER_TYPE
+    _kernel_initializer: str = KERNEL_INITIALIZER
+    _bias_initializer: str = BIAS_INITIALIZER
+    _checkpoint_dir: str = CHECKPOINT_DIR
+    _early_stop: bool = EARLY_STOP
+    _save_model: bool = SAVE_MODEL
+    _save_best: bool = SAVE_BEST
+    _period: int = PERIOD
+    _patience: int = PATIENCE
+    _min_delta: float = MIN_DELTA
+    _best_model_filename: str = BEST_MODEL_FILENAME
+    _validation_split: float = VALIDATION_SPLIT
+    _strategy: Strategy = MirroredStrategy()
+    _gpu_ids: str = GPU_IDS
+    _max_gpu_memory_allocation: int = MAX_GPU_MEMORY_ALLOCATION
 
-    def __init__(self, original_dim: int = ORIGINAL_DIM, latent_dim: int = LATENT_DIM, batch_size: int = BATCH_SIZE,
-                 intermediate_dims: List[int] = INTERMEDIATE_DIMS,
-                 learning_rate: float = LEARNING_RATE, epochs: int = EPOCHS, activation: str = ACTIVATION,
-                 out_activation: str = OUT_ACTIVATION, number_of_k_fold_splits: float = NUMBER_OF_K_FOLD_SPLITS,
-                 optimizer_type: OptimizerType = OPTIMIZER_TYPE, kernel_initializer: str = KERNEL_INITIALIZER,
-                 bias_initializer: str = BIAS_INITIALIZER, checkpoint_dir: str = CHECKPOINT_DIR,
-                 early_stop: bool = EARLY_STOP, save_model: bool = SAVE_MODEL, save_best: bool = SAVE_BEST,
-                 period: int = PERIOD, patience: int = PATIENCE, min_delta: float = MIN_DELTA,
-                 best_model_filename: str = BEST_MODEL_FILENAME, validation_split: float = VALIDATION_SPLIT):
-        self._validation_split = validation_split
-        self._best_model_filename = best_model_filename
-        self._min_delta = min_delta
-        self._patience = patience
-        self._save_best = save_best
-        self._save_model = save_model
-        self._original_dim = original_dim
-        self.latent_dim = latent_dim
-        self._intermediate_dims = intermediate_dims
-        self._batch_size = batch_size
-        self._epochs = epochs
-        self._activation = activation
-        self._out_activation = out_activation
-        self._number_of_k_fold_splits = number_of_k_fold_splits
-        self._bias_initializer = bias_initializer
-        self._kernel_initializer = kernel_initializer
-        self._checkpoint_dir = checkpoint_dir
-        self._early_stop = early_stop
-        self._period = period
+    def __post_init__(self):
+        # Calculate true batch size.
+        self._batch_size = self._batch_size_per_replica * self._strategy.num_replicas_in_sync
 
         # Build encoder and decoder.
         encoder = self._build_encoder()
         decoder = self._build_decoder()
 
-        # Build VAE.
-        self.model = VAE(encoder, decoder)
-
-        # Manufacture an optimizer and compile model with.
-        optimizer = OptimizerFactory.create_optimizer(optimizer_type, learning_rate)
-        self.model.compile(optimizer=optimizer,
-                           metrics=[self.model.total_loss_tracker, self.model.val_total_loss_tracker])
+        # Compile model within a distributed strategy.
+        with self._strategy.scope():
+            # Build VAE.
+            self.model = VAE(encoder, decoder)
+            # Manufacture an optimizer and compile model with.
+            optimizer = OptimizerFactory.create_optimizer(self._optimizer_type, self._learning_rate)
+            self.model.compile(optimizer=optimizer,
+                               metrics=[self.model.total_loss_tracker, self.model.val_total_loss_tracker])
 
     def _prepare_input_layers(self, for_encoder: bool) -> Tuple[Input, Input, Input, Input]:
         """
@@ -209,22 +194,26 @@ class VAEHandler:
 
         """
 
-        # Prepare input layer.
-        x_input, e_input, angle_input, geo_input = self._prepare_input_layers(for_encoder=True)
-        x = concatenate([x_input, e_input, angle_input, geo_input])
-        # Construct hidden layers (Dense and Batch Normalization).
-        for intermediate_dim in self._intermediate_dims:
-            x = Dense(units=intermediate_dim, activation=self._activation, kernel_initializer=self._kernel_initializer,
-                      bias_initializer=self._bias_initializer)(x)
-            x = BatchNormalization()(x)
-        # Add Dense layer to get description of multidimensional Gaussian distribution in terms of mean
-        # and log(variance).
-        z_mean = Dense(self.latent_dim, name="z_mean")(x)
-        z_log_var = Dense(self.latent_dim, name="z_log_var")(x)
-        # Sample a probe from the distribution.
-        z = _Sampling()([z_mean, z_log_var])
-        # Return model.
-        return Model(inputs=[x_input, e_input, angle_input, geo_input], outputs=[z_mean, z_log_var, z], name="encoder")
+        with self._strategy.scope():
+            # Prepare input layer.
+            x_input, e_input, angle_input, geo_input = self._prepare_input_layers(for_encoder=True)
+            x = concatenate([x_input, e_input, angle_input, geo_input])
+            # Construct hidden layers (Dense and Batch Normalization).
+            for intermediate_dim in self._intermediate_dims:
+                x = Dense(units=intermediate_dim, activation=self._activation,
+                          kernel_initializer=self._kernel_initializer,
+                          bias_initializer=self._bias_initializer)(x)
+                x = BatchNormalization()(x)
+            # Add Dense layer to get description of multidimensional Gaussian distribution in terms of mean
+            # and log(variance).
+            z_mean = Dense(self.latent_dim, name="z_mean")(x)
+            z_log_var = Dense(self.latent_dim, name="z_log_var")(x)
+            # Sample a probe from the distribution.
+            z = _Sampling()([z_mean, z_log_var])
+            # Create model.
+            encoder = Model(inputs=[x_input, e_input, angle_input, geo_input], outputs=[z_mean, z_log_var, z],
+                            name="encoder")
+        return encoder
 
     def _build_decoder(self) -> Model:
         """ Based on a list of intermediate dimensions, activation function and initializers for kernel and bias builds
@@ -235,18 +224,22 @@ class VAEHandler:
 
         """
 
-        # Prepare input layer.
-        latent_input, e_input, angle_input, geo_input = self._prepare_input_layers(for_encoder=False)
-        x = concatenate([latent_input, e_input, angle_input, geo_input])
-        # Construct hidden layers (Dense and Batch Normalization).
-        for intermediate_dim in reversed(self._intermediate_dims):
-            x = Dense(units=intermediate_dim, activation=self._activation, kernel_initializer=self._kernel_initializer,
-                      bias_initializer=self._bias_initializer)(x)
-            x = BatchNormalization()(x)
-        # Add Dense layer to get output which shape is compatible in an input's shape.
-        decoder_outputs = Dense(units=self._original_dim, activation=self._out_activation)(x)
-        # Return model.
-        return Model(inputs=[latent_input, e_input, angle_input, geo_input], outputs=decoder_outputs, name="decoder")
+        with self._strategy.scope():
+            # Prepare input layer.
+            latent_input, e_input, angle_input, geo_input = self._prepare_input_layers(for_encoder=False)
+            x = concatenate([latent_input, e_input, angle_input, geo_input])
+            # Construct hidden layers (Dense and Batch Normalization).
+            for intermediate_dim in reversed(self._intermediate_dims):
+                x = Dense(units=intermediate_dim, activation=self._activation,
+                          kernel_initializer=self._kernel_initializer,
+                          bias_initializer=self._bias_initializer)(x)
+                x = BatchNormalization()(x)
+            # Add Dense layer to get output which shape is compatible in an input's shape.
+            decoder_outputs = Dense(units=self._original_dim, activation=self._out_activation)(x)
+            # Create model.
+            decoder = Model(inputs=[latent_input, e_input, angle_input, geo_input], outputs=decoder_outputs,
+                            name="decoder")
+        return decoder
 
     def _manufacture_callbacks(self) -> List[Callback]:
         """
@@ -277,6 +270,49 @@ class VAEHandler:
                                              period=self._period))
         return callbacks
 
+    def _get_train_and_val_data(self, dataset: np.array, e_cond: np.array, angle_cond: np.array, geo_cond: np.array,
+                                train_indexes: np.array, validation_indexes: np.array) -> Tuple[Dataset, Dataset]:
+        """
+        Splits data into train and validation set based on given lists of indexes.
+
+        """
+
+        # Prepare training data.
+        train_dataset = dataset[train_indexes, :]
+        train_e_cond = e_cond[train_indexes]
+        train_angle_cond = angle_cond[train_indexes]
+        train_geo_cond = geo_cond[train_indexes, :]
+
+        # Prepare validation data.
+        val_dataset = dataset[validation_indexes, :]
+        val_e_cond = e_cond[validation_indexes]
+        val_angle_cond = angle_cond[validation_indexes]
+        val_geo_cond = geo_cond[validation_indexes, :]
+
+        # Gather them into tuples.
+        train_data = (train_dataset, train_e_cond, train_angle_cond, train_geo_cond)
+        val_data = (val_dataset, val_e_cond, val_angle_cond, val_geo_cond)
+
+        # Wrap data in Dataset objects.
+        train_data = Dataset.from_tensor_slices(tuple(train_data))
+        val_data = Dataset.from_tensor_slices(tuple(val_data))
+
+        # The batch size must now be set on the Dataset objects.
+        train_data = train_data.batch(self._batch_size)
+        val_data = val_data.batch(self._batch_size)
+
+        # Shuffle dataset.
+        train_data = train_data.shuffle(BUFFER_SIZE, reshuffle_each_iteration=True)
+        val_data = val_data.shuffle(BUFFER_SIZE, reshuffle_each_iteration=True)
+
+        # Disable AutoShard.
+        options = tf.data.Options()
+        options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.DATA
+        train_data = train_data.with_options(options)
+        val_data = val_data.with_options(options)
+
+        return train_data, val_data
+
     def _k_fold_training(self, dataset: np.array, e_cond: np.array, angle_cond: np.array, geo_cond: np.array,
                          callbacks: List[Callback], verbose: bool = True) -> List[History]:
         """
@@ -298,20 +334,20 @@ class VAEHandler:
         applicable).
 
         """
+        # TODO(@mdragula): KFold cross validation can be parallelized. Each fold is independent from each the others.
         k_fold = KFold(n_splits=self._number_of_k_fold_splits, shuffle=True)
         histories = []
 
         for i, (train_indexes, validation_indexes) in enumerate(k_fold.split(dataset)):
             print(f"K-fold: {i + 1}/{self._number_of_k_fold_splits}...")
-            train_data, val_data = _get_train_and_val_data(dataset, e_cond, angle_cond, geo_cond, train_indexes,
-                                                           validation_indexes)
+            train_data, val_data = self._get_train_and_val_data(dataset, e_cond, angle_cond, geo_cond, train_indexes,
+                                                                validation_indexes)
 
             history = self.model.fit(x=train_data,
                                      shuffle=True,
                                      epochs=self._epochs,
                                      verbose=verbose,
                                      validation_data=(val_data, None),
-                                     batch_size=self._batch_size,
                                      callbacks=callbacks
                                      )
             histories.append(history)
@@ -348,14 +384,15 @@ class VAEHandler:
         split = int(dataset_size * self._validation_split)
         train_indexes, validation_indexes = permutation[split:], permutation[:split]
 
-        train_data, val_data = _get_train_and_val_data(dataset, e_cond, angle_cond, geo_cond, train_indexes,
-                                                       validation_indexes)
+        train_data, val_data = self._get_train_and_val_data(dataset, e_cond, angle_cond, geo_cond, train_indexes,
+                                                            validation_indexes)
+
         history = self.model.fit(x=train_data,
                                  shuffle=True,
                                  epochs=self._epochs,
                                  verbose=verbose,
                                  validation_data=(val_data, None),
-                                 batch_size=self._batch_size,
+                                 batch_size=self._batch_size_per_replica,
                                  callbacks=callbacks
                                  )
         if self._save_best:

@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import Tuple, Dict, Any, List
 
 import numpy as np
@@ -6,13 +7,14 @@ from optuna import Trial, create_study, get_all_study_summaries, load_study
 from optuna.pruners import MedianPruner
 from optuna.trial import TrialState
 
-from core.constants import LEARNING_RATE, BATCH_SIZE, ACTIVATION, OUT_ACTIVATION, \
+from core.constants import LEARNING_RATE, BATCH_SIZE_PER_REPLICA, ACTIVATION, OUT_ACTIVATION, \
     OPTIMIZER_TYPE, KERNEL_INITIALIZER, BIAS_INITIALIZER, N_TRIALS, LATENT_DIM, \
     INTERMEDIATE_DIMS, MAX_HIDDEN_LAYER_DIM
 from core.model import VAEHandler
 from utils.preprocess import preprocess
 
 
+@dataclass
 class HyperparameterTuner:
     """Tuner which looks for the best hyperparameters of a Variational Autoencoder specified in model.py.
 
@@ -24,36 +26,40 @@ class HyperparameterTuner:
         _discrete_parameters: A dictionary of hyperparameters taking discrete values in the range [low, high].
         _continuous_parameters: A dictionary of hyperparameters taking continuous values in the range [low, high].
         _categorical_parameters: A dictionary of hyperparameters taking values specified by the list of them.
+        _storage: A string representing URL to a database required for a distributed training
+        _study_name: A string, a name of study.
 
     """
+    _discrete_parameters: Dict[str, Tuple[int, int]]
+    _continuous_parameters: Dict[str, Tuple[float, float]]
+    _categorical_parameters: Dict[str, List[Any]]
+    _storage: str = None
+    _study_name: str = None
 
     def _check_hyperparameters(self):
         available_hyperparameters = ["latent_dim", "nb_hidden_layers", "learning_rate", "activation", "out_activation",
-                                     "optimizer_type", "kernel_initializer", "bias_initializer", "batch_size"]
+                                     "optimizer_type", "kernel_initializer", "bias_initializer",
+                                     "batch_size_per_replica"]
         hyperparameters_to_be_optimized = list(self._discrete_parameters.keys()) + list(
             self._continuous_parameters.keys()) + list(self._categorical_parameters.keys())
         for hyperparameter_name in hyperparameters_to_be_optimized:
             if hyperparameter_name not in available_hyperparameters:
                 raise Exception(f"Unknown hyperparameter: {hyperparameter_name}")
 
-    def __init__(self, discrete_parameters: Dict[str, Tuple[int, int]],
-                 continuous_parameters: Dict[str, Tuple[float, float]], categorical_parameters: Dict[str, List[Any]],
-                 storage: str = None, study_name: str = None):
-        self._discrete_parameters = discrete_parameters
-        self._continuous_parameters = continuous_parameters
-        self._categorical_parameters = categorical_parameters
+    def __post_init__(self):
         self._check_hyperparameters()
         self._energies_train, self._cond_e_train, self._cond_angle_train, self._cond_geo_train = preprocess()
 
-        if storage is not None and study_name is not None:
+        if self._storage is not None and self._study_name is not None:
             # Parallel optimization
-            study_summaries = get_all_study_summaries(storage)
-            if any(study_name == study_summary.study_name for study_summary in study_summaries):
+            study_summaries = get_all_study_summaries(self._storage)
+            if any(self._study_name == study_summary.study_name for study_summary in study_summaries):
                 # The study is already created in the database. Load it.
-                self._study = load_study(study_name, storage)
+                self._study = load_study(self._study_name, self._storage)
             else:
                 # The study does not exist in the database. Create a new one.
-                self._study = create_study(storage=storage, sampler=None, pruner=MedianPruner(), study_name=study_name,
+                self._study = create_study(storage=self._storage, sampler=None, pruner=MedianPruner(),
+                                           study_name=self._study_name,
                                            direction="minimize")
         else:
             # Single optimization
@@ -91,17 +97,15 @@ class HyperparameterTuner:
 
             intermediate_dims = [trial.suggest_int(name=f"intermediate_dim_{i}", low=low, high=high) for i, (low, high)
                                  in enumerate(ranges)]
-
-            print(intermediate_dims)
         else:
             intermediate_dims = INTERMEDIATE_DIMS
 
-        if "batch_size" in self._discrete_parameters.keys():
-            batch_size = trial.suggest_int(name="batch_size",
-                                           low=self._discrete_parameters["batch_size"][0],
-                                           high=self._discrete_parameters["batch_size"][1])
+        if "batch_size_per_replica" in self._discrete_parameters.keys():
+            batch_size_per_replica = trial.suggest_int(name="batch_size_per_replica",
+                                                       low=self._discrete_parameters["batch_size_per_replica"][0],
+                                                       high=self._discrete_parameters["batch_size_per_replica"][1])
         else:
-            batch_size = BATCH_SIZE
+            batch_size_per_replica = BATCH_SIZE_PER_REPLICA
 
         # Continuous parameters
         if "learning_rate" in self._continuous_parameters.keys():
@@ -142,18 +146,18 @@ class HyperparameterTuner:
         else:
             bias_initializer = BIAS_INITIALIZER
 
-        return VAEHandler(batch_size=batch_size,
-                          intermediate_dims=intermediate_dims,
+        return VAEHandler(_batch_size_per_replica=batch_size_per_replica,
+                          _intermediate_dims=intermediate_dims,
                           latent_dim=latent_dim,
-                          learning_rate=learning_rate,
-                          activation=activation,
-                          out_activation=out_activation,
-                          optimizer_type=optimizer_type,
-                          kernel_initializer=kernel_initializer,
-                          bias_initializer=bias_initializer,
-                          early_stop=True,
-                          save_best=True,
-                          best_model_filename=f"VAE_best_trial_{trial.number}.tf")
+                          _learning_rate=learning_rate,
+                          _activation=activation,
+                          _out_activation=out_activation,
+                          _optimizer_type=optimizer_type,
+                          _kernel_initializer=kernel_initializer,
+                          _bias_initializer=bias_initializer,
+                          _early_stop=True,
+                          _save_best=True,
+                          _best_model_filename=f"VAE_best_trial_{trial.number}")
 
     def _objective(self, trial: Trial) -> float:
         """For a given trial trains the model and returns an average validation loss.

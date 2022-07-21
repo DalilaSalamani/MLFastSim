@@ -36,7 +36,7 @@ GEN_DIR = "./generation/"
 """
 Model default parameters.
 """
-BATCH_SIZE = 100
+BATCH_SIZE_PER_REPLICA = 100
 # Total number of readout cells (represents the number of nodes in the input/output layers of the model).
 ORIGINAL_DIM = N_CELLS_Z * N_CELLS_R * N_CELLS_PHI
 INTERMEDIATE_DIMS = [100, 50, 20, 14]
@@ -57,14 +57,16 @@ PERIOD = 5
 PATIENCE = 5
 MIN_DELTA = 0.01
 BEST_MODEL_FILENAME = "VAE_best"
+# GPU identifiers separated by comma, no spaces.
+GPU_IDS = "0,1"
+# Maximum allowed memory on one of the GPUs (in GB)
+MAX_GPU_MEMORY_ALLOCATION = 8
+# Buffer size used while shuffling the dataset.
+BUFFER_SIZE = 1000
 
 """
 Optimizer parameters.
 """
 N_TRIALS = 5
-# Maximum allowed memory on one of the GPUs (in GB)
-MAX_GPU_MEMORY_ALLOCATION = 8
-# ID of GPU used in a process
-GPU_ID = 0
 # Maximum size of a hidden layer
 MAX_HIDDEN_LAYER_DIM = 2000

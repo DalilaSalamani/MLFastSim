@@ -57,14 +57,14 @@ PERIOD = 5
 PATIENCE = 5
 MIN_DELTA = 0.01
 BEST_MODEL_FILENAME = "VAE_best"
+# GPU identifiers separated by comma, no spaces.
+GPU_IDS = "0,1"
+# Maximum allowed memory on one of the GPUs (in GB)
+MAX_GPU_MEMORY_ALLOCATION = 8
 
 """
 Optimizer parameters.
 """
 N_TRIALS = 5
-# Maximum allowed memory on one of the GPUs (in GB)
-MAX_GPU_MEMORY_ALLOCATION = 8
-# ID of GPU used in a process
-GPU_ID = 0
 # Maximum size of a hidden layer
 MAX_HIDDEN_LAYER_DIM = 2000

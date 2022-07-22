@@ -1,9 +1,9 @@
-from enum import Enum
+from enum import IntEnum
 
 from tensorflow.keras.optimizers import Optimizer, Adadelta, Adagrad, Adam, Adamax, Ftrl, SGD, Nadam, RMSprop
 
 
-class OptimizerType(Enum):
+class OptimizerType(IntEnum):
     """ Enum class of various optimizer types.
     """
 

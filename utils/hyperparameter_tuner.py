@@ -89,7 +89,9 @@ class HyperparameterTuner:
             ranges = [(chunk[0], chunk[-1]) for chunk in chunks]
             ranges = reversed(ranges)
 
-            intermediate_dims = [trial.suggest_int(name=f"intermediate_dim_{i}", low=low, high=high) for i, (low, high)
+            # Cast from np.int to int allows to become JSON serializable.
+            intermediate_dims = [trial.suggest_int(name=f"intermediate_dim_{i}", low=int(low), high=int(high)) for
+                                 i, (low, high)
                                  in enumerate(ranges)]
 
             print(intermediate_dims)

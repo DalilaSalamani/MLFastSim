@@ -1,10 +1,13 @@
-from enum import Enum
+from enum import IntEnum
 
 from tensorflow.keras.optimizers import Optimizer, Adadelta, Adagrad, Adam, Adamax, Ftrl, SGD, Nadam, RMSprop
 
 
-class OptimizerType(Enum):
+class OptimizerType(IntEnum):
     """ Enum class of various optimizer types.
+
+    This class must be IntEnum to be JSON serializable. This feature is important because, when Optuna's study is
+    saved in a relational DB, all objects must be JSON serializable.
     """
 
     SGD = 0

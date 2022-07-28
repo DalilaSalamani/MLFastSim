@@ -1,310 +1,216 @@
-"""
-** observables **
-defines a set of shower observables 
-"""
+from dataclasses import dataclass
+from enum import Enum
 
-import matplotlib.pyplot as plt
 import numpy as np
-from math import pow
-import scipy.stats
 
 from core.constants import N_CELLS_Z, N_CELLS_R, SIZE_Z, SIZE_R
 
-plt.rcParams.update({"font.size": 22})
+
+@dataclass
+class Observable:
+    """ An abstract class defining interface of all observables.
+
+    Do not use this class directly.
+
+    Attributes:
+          _input: A numpy array with shape = (NE, R, PHI, Z), where NE stays for number of events.
+    """
+    _input: np.ndarray
 
 
-def prepare_customizable_profile(g4, vae, energy_particle, angle_particle,
-                                 geometry, bins, y_log_scale, hist_weight):
-    fig, axes = plt.subplots(2, 1, figsize=(15, 10), clear=True, sharex="all")
-    if hist_weight:
-        axes[0].hist(np.arange(N_CELLS_Z),
-                     weights=g4,
-                     label="FullSim",
-                     bins=bins,
-                     alpha=0.4)
-        axes[0].hist(np.arange(N_CELLS_Z),
-                     weights=vae,
-                     label="MLSim",
-                     bins=bins,
-                     alpha=0.4)
-    else:
-        axes[0].hist(g4, label="FullSim", bins=bins, alpha=0.4)
-        axes[0].hist(vae, label="FullSim", bins=bins, alpha=0.4)
-    if y_log_scale:
-        axes[0].set_yscale("log")
-    axes[0].legend(loc="upper right")
-    axes[0].set_ylabel("Energy [Mev]")
-    axes[0].set_title(
-        f" $e^-$ , {energy_particle} [GeV], {angle_particle}$^{{\circ}}$, {geometry} "
-    )
-    axes[1].plot(np.array(vae) / np.array(g4), "-o")
-    axes[1].set_ylabel("MLSim/FullSim")
-    axes[1].axhline(y=1, color="black")
-    return fig, axes
+class ProfileType(Enum):
+    """ Enum class of various profile types.
+
+    """
+    LONGITUDINAL = 0
+    LATERAL = 1
 
 
-# longitudinal_profile function plots the longitudinal profile comparing full and fast simulation data of a single
-# geometry, energy and angle of primary particles
-def longitudinal_profile(g4,
-                         vae,
-                         energy_particle,
-                         angle_particle,
-                         geometry,
-                         save_dir,
-                         y_log_scale=True,
-                         hist_weight=True):
-    fig, axes = prepare_customizable_profile(
-        g4, vae, energy_particle, angle_particle, geometry,
-        np.linspace(0, N_CELLS_Z, N_CELLS_Z), y_log_scale, hist_weight)
-    axes[0].set_xlabel("Layer index")
-    axes[1].set_xlabel("Layer index")
-    plt.savefig(
-        f"{save_dir}LongProf_Geo_{geometry}_E_{energy_particle}_Angle_{angle_particle}.png"
-    )
-    plt.show()
+@dataclass
+class Profile(Observable):
+    """ An abstract class describing behaviour of LongitudinalProfile and LateralProfile.
+
+    Do not use this class directly. Use LongitudinalProfile or LateralProfile instead.
+
+    """
+
+    def calc_profile(self) -> np.ndarray:
+        pass
+
+    def calc_first_moment(self) -> np.ndarray:
+        pass
+
+    def calc_second_moment(self) -> np.ndarray:
+        pass
 
 
-# lateral_profile function plots the lateral first moment comparing full and fast simulation data of a single geometry,
-# energy and angle of primary particles
-def lateral_profile(g4,
-                    vae,
-                    energy_particle,
-                    angle_particle,
-                    geometry,
-                    save_dir,
-                    y_log_scale=True,
-                    hist_weight=True):
-    fig, axes = prepare_customizable_profile(
-        g4, vae, energy_particle, angle_particle, geometry,
-        np.linspace(0, N_CELLS_R - 1, N_CELLS_R), y_log_scale, hist_weight)
-    axes[0].set_xlabel("r index")
-    axes[1].set_xlabel("r index")
-    plt.savefig(
-        f"{save_dir}LatProf_Geo_{geometry}_E_{energy_particle}_Angle_{angle_particle}.png"
-    )
-    plt.show()
+@dataclass
+class LongitudinalProfile(Profile):
+    """ A class defining observables related to LongitudinalProfile.
+
+    Attributes:
+        _energies_per_event: A numpy array with shape = (NE, Z) where NE stays for a number of events. An
+            element [i, j] is a sum of energies detected in all cells located in a jth layer for an ith event.
+        _total_energy_per_event: A numpy array with shape = (NE, ). An element [i] is a sum of energies detected in all
+            cells for an ith event.
+        _w: A numpy array = [0, 1, ..., Z - 1] which represents weights used in computation of first and second moment.
+
+    """
+
+    def __post_init__(self):
+        self._energies_per_event = np.sum(self._input, axis=(1, 2))
+        self._total_energy_per_event = np.sum(self._energies_per_event, axis=1)
+        self._w = np.arange(N_CELLS_Z)
+
+    def calc_profile(self) -> np.ndarray:
+        """ Calculates a longitudinal profile.
+
+        A longitudinal profile for a given layer l (l = 0, ..., Z - 1) is defined as:
+        sum_{i = 0}^{NE - 1} energy_per_event[i, l].
+
+        Returns:
+            A numpy array of longitudinal profiles for each layer with a shape = (Z, ).
+
+        """
+        return np.sum(self._energies_per_event, axis=0)
+
+    def calc_first_moment(self) -> np.ndarray:
+        """ Calculates a first moment of profile.
+
+        A first moment of a longitudinal profile for a given event e (e = 0, ..., NE - 1) is defined as:
+        FM[e] = alpha * (sum_{i = 0}^{Z - 1} energies_per_event[e, i] * w[i]) / total_energy_per_event[e], where
+        w = [0, 1, 2, ..., Z - 1],
+        alpha = SIZE_Z defined in core/constants.py.
+
+        Returns:
+            A numpy array of first moments of longitudinal profiles for each event with a shape = (NE, ).
+
+        """
+        return SIZE_Z * np.dot(self._energies_per_event, self._w) / self._total_energy_per_event
+
+    def calc_second_moment(self) -> np.ndarray:
+        """ Calculates a second moment of a longitudinal profile.
+
+        A second moment of a longitudinal profile for a given event e (e = 0, ..., NE - 1) is defined as:
+        SM[e] = (sum_{i = 0}^{Z - 1} (w[i] - alpha - FM[e])^2 * energies_per_event[e, i]) total_energy_per_event[e],
+        where
+        w = [0, 1, 2, ..., Z - 1],
+        alpha = SIZE_Z defined in ochre/constants.py
+
+        Returns:
+            A numpy array of second moments of longitudinal profiles for each event with a shape = (NE, ).
+        """
+        first_moment = self.calc_first_moment()
+        first_moment = np.expand_dims(first_moment, axis=1)
+        w = np.expand_dims(self._w, axis=0)
+        # w has now a shape = [1, Z] and first moment has a shape = [NE, 1]. There is a broadcasting in the line
+        # below how that one create an array with a shape = [NE, Z]
+        return np.sum(np.multiply(np.power(w * SIZE_Z - first_moment, 2), self._energies_per_event),
+                      axis=1) / self._total_energy_per_event
 
 
-# Gaussian fit
-def gaussian_fit(g4, vae, bins, energy_particle, angle_particle, geometry,
-                 save_dir, observable_name, x_label):
+@dataclass
+class LateralProfile(Profile):
+    """ A class defining observables related to LateralProfile.
 
-    def best_fit(data, bins):
-        _, bins, _ = plt.hist(data, bins, density=1)
-        mu, sigma = scipy.stats.norm.fit(bins, )
-        best_fit_line = scipy.stats.norm.pdf(bins, mu, sigma)
-        return mu, sigma, best_fit_line, bins
+    Attributes:
+        _energies_per_event: A numpy array with shape = (NE, R) where NE stays for a number of events. An
+            element [i, j] is a sum of energies detected in all cells located in a jth layer for an ith event.
+        _total_energy_per_event: A numpy array with shape = (NE, ). An element [i] is a sum of energies detected in all
+            cells for an ith event.
+        _w: A numpy array = [0, 1, ..., R - 1] which represents weights used in computation of first and second moment.
 
-    mu_g4, sigma_g4, best_fit_line_g4, bins_g4 = best_fit(g4, bins)
-    mu_vae, sigma_g4_vae, best_fit_line_vae, bins_vae = best_fit(vae, bins)
-    plt.plot(bins_g4, best_fit_line_g4, label="FullSim")
-    plt.plot(bins_vae, best_fit_line_vae, label="FastSim")
-    plt.xlabel(f"{x_label}")
-    plt.legend()
-    plt.savefig(
-        f"{save_dir}{observable_name}_{geometry}_E_{energy_particle}_Angle_{angle_particle}.png"
-    )
-    plt.show()
+    """
 
+    def __post_init__(self):
+        self._energies_per_event = np.sum(self._input, axis=(2, 3))
+        self._total_energy_per_event = np.sum(self._energies_per_event, axis=1)
+        self._w = np.arange(N_CELLS_R)
 
-# longitudinal_first_moment function plots the longitudinal profile comparing full and fast simulation data of a single
-# geometry, energy and angle of primary particles
-def longitudinal_first_moment(g4,
-                              vae,
-                              energy_particle,
-                              angle_particle,
-                              geometry,
-                              save_dir,
-                              y_log_scale=True,
-                              hist_weight=False,
-                              gauss_fit=False):
-    x_label = "$<\lambda>$ (mm)"
-    observable_name = "LongFirstMoment"
-    bins = np.linspace(0, 0.4 * N_CELLS_Z * SIZE_Z, 128)
-    if (gauss_fit):
-        gaussian_fit(g4, vae, bins, energy_particle, angle_particle, geometry,
-                     save_dir, observable_name, x_label)
-    else:
-        fig, axes = prepare_customizable_profile(g4, vae, energy_particle,
-                                                 angle_particle, geometry,
-                                                 bins, y_log_scale)
-        axes[0].set_xlabel(f"{x_label}")
-        axes[1].set_xlabel(f"{x_label}")
-        plt.savefig(
-            f"{save_dir}{observable_name}_Geo_{geometry}_E_{energy_particle}_Angle_{angle_particle}.png"
-        )
-        plt.show()
+    def calc_profile(self) -> np.ndarray:
+        """ Calculates a lateral profile.
 
+        A lateral profile for a given layer l (l = 0, ..., R - 1) is defined as:
+        sum_{i = 0}^{NE - 1} energy_per_event[i, l].
 
-# lateral_first_moment function plots the lateral first moment comparing full and fast simulation data of a single geometry,
-# energy and angle of primary particles
-def lateral_first_moment(g4,
-                         vae,
-                         energy_particle,
-                         angle_particle,
-                         geometry,
-                         save_dir,
-                         y_log_scale=True,
-                         hist_weight=False,
-                         gauss_fit=False):
-    x_label = "$<r>$ (mm)"
-    observable_name = "LatFirstMoment"
-    bins = np.linspace(0, 0.75 * N_CELLS_R * SIZE_R, 128)
-    if (gauss_fit):
-        gaussian_fit(g4, vae, bins, energy_particle, angle_particle, geometry,
-                     save_dir, observable_name, x_label)
-    else:
-        fig, axes = prepare_customizable_profile(g4, vae, energy_particle,
-                                                 angle_particle, geometry,
-                                                 bins, y_log_scale)
-        axes[0].set_xlabel(f"{x_label}")
-        axes[1].set_xlabel(f"{x_label}")
-        plt.savefig(
-            f"{save_dir}{observable_name}_Geo_{geometry}_E_{energy_particle}_Angle_{angle_particle}.png"
-        )
-        plt.show()
+        Returns:
+            A numpy array of longitudinal profiles for each layer with a shape = (R, ).
+
+        """
+        return np.sum(self._energies_per_event, axis=0)
+
+    def calc_first_moment(self) -> np.ndarray:
+        """ Calculates a first moment of profile.
+
+        A first moment of a lateral profile for a given event e (e = 0, ..., NE - 1) is defined as:
+        FM[e] = alpha * (sum_{i = 0}^{R - 1} energies_per_event[e, i] * w[i]) / total_energy_per_event[e], where
+        w = [0, 1, 2, ..., R - 1],
+        alpha = SIZE_R defined in core/constants.py.
+
+        Returns:
+            A numpy array of first moments of lateral profiles for each event with a shape = (NE, ).
+
+        """
+        return SIZE_R * np.dot(self._energies_per_event, self._w) / self._total_energy_per_event
+
+    def calc_second_moment(self) -> np.ndarray:
+        """ Calculates a second moment of a lateral profile.
+
+        A second moment of a lateral profile for a given event e (e = 0, ..., NE - 1) is defined as:
+        SM[e] = (sum_{i = 0}^{R - 1} (w[i] - alpha - FM[e])^2 * energies_per_event[e, i]) total_energy_per_event[e],
+        where
+        w = [0, 1, 2, ..., R - 1],
+        alpha = SIZE_R defined in ochre/constants.py
+
+        Returns:
+            A numpy array of second moments of lateral profiles for each event with a shape = (NE, ).
+        """
+        first_moment = self.calc_first_moment()
+        first_moment = np.expand_dims(first_moment, axis=1)
+        w = np.expand_dims(self._w, axis=0)
+        # w has now a shape = [1, R] and first moment has a shape = [NE, 1]. There is a broadcasting in the line
+        # below how that one create an array with a shape = [NE, R]
+        return np.sum(np.multiply(np.power(w * SIZE_R - first_moment, 2), self._energies_per_event),
+                      axis=1) / self._total_energy_per_event
 
 
-# longitudinal_second_moment function plots the longitudinal profile comparing full and fast simulation data of a single
-# geometry, energy and angle of primary particles
-def longitudinal_second_moment(g4,
-                               vae,
-                               energy_particle,
-                               angle_particle,
-                               geometry,
-                               save_dir,
-                               y_log_scale=True,
-                               hist_weight=False,
-                               gauss_fit=False):
-    x_label = "$<\lambda^{2}>$ (mm^{2})"
-    observable_name = "LongSecondMoment"
-    bins = np.linspace(0, pow(N_CELLS_Z * SIZE_Z, 2) / 35., 128)
-    if (gauss_fit):
-        gaussian_fit(g4, vae, bins, energy_particle, angle_particle, geometry,
-                     save_dir, observable_name, x_label)
-    else:
-        fig, axes = prepare_customizable_profile(g4, vae, energy_particle,
-                                                 angle_particle, geometry,
-                                                 bins, y_log_scale)
-        axes[0].set_xlabel(f"{x_label}")
-        axes[1].set_xlabel(f"{x_label}")
-        plt.savefig(
-            f"{save_dir}{observable_name}_Geo_{geometry}_E_{energy_particle}_Angle_{angle_particle}.png"
-        )
-        plt.show()
+@dataclass
+class Energy(Observable):
+    """ A class defining observables total energy per event and cell energy.
 
+    """
 
-# lateral_second_moment function plots the lateral first moment comparing full and fast simulation data of a single geometry,
-# energy and angle of primary particles
-def lateral_second_moment(g4,
-                          vae,
-                          energy_particle,
-                          angle_particle,
-                          geometry,
-                          save_dir,
-                          y_log_scale=True,
-                          hist_weight=False,
-                          gauss_fit=False):
-    x_label = "$< r^{2}>$(mm^{2})"
-    observable_name = "LatSecondMoment"
-    bins = np.linspace(0, pow(N_CELLS_R * SIZE_R, 2) / 8., 128)
-    if (gauss_fit):
-        gaussian_fit(g4, vae, bins, energy_particle, angle_particle, geometry,
-                     save_dir, observable_name, x_label)
-    else:
-        fig, axes = prepare_customizable_profile(g4, vae, energy_particle,
-                                                 angle_particle, geometry,
-                                                 bins, y_log_scale)
-        axes[0].set_xlabel(f"{x_label}")
-        axes[1].set_xlabel(f"{x_label}")
-        plt.savefig(
-            f"{save_dir}{observable_name}_Geo_{geometry}_E_{energy_particle}_Angle_{angle_particle}.png"
-        )
-        plt.show()
+    def calc_total_energy(self):
+        """ Calculates total energy detected in an event.
 
+        Total energy for a given event e (e = 0, ..., NE - 1) is defined as a sum of energies detected in all cells
+        for this event.
 
-# Total energy distribution comparing full and fast simulation data of a single geometry, energy and angle of primary
-# particles
-def e_tot(g4,
-          vae,
-          energy_particle,
-          angle_particle,
-          geometry,
-          save_dir,
-          y_log_scale=True):
-    plt.figure(figsize=(12, 8))
-    bins = np.linspace(np.min(g4), np.max(vae), 50)
-    plt.hist(g4, histtype="step", label="FullSim", bins=bins, color="black")
-    plt.hist(vae, histtype="step", label="MLSim", bins=bins, color="red")
-    plt.legend()
-    if y_log_scale:
-        plt.yscale("log")
-    plt.xlabel("Energy [MeV]")
-    plt.ylabel("# events")
-    plt.savefig(
-        f"{save_dir}E_tot_Geo_{geometry}_E_{energy_particle}_Angle_{angle_particle}.png"
-    )
-    plt.show()
+        Returns:
+            A numpy array of total energy values with shape = (NE, ).
+        """
+        return np.sum(self._input, axis=(1, 2, 3))
 
+    def calc_cell_energy(self):
+        """ Calculates cell energy.
 
-# Energy per layer distribution comparing full and fast simulation data of a single geometry, energy and angle of
-# primary particles
-def energy_layer(g4, vae, energy_particle, angle_particle, geometry, save_dir):
-    fig, ax = plt.subplots(5, 9, figsize=(20, 20))
-    cpt = 0
-    for i in range(5):
-        for j in range(9):
-            g4_l = np.array([np.sum(i) for i in g4[:, :, :, i, j]])
-            vae_l = np.array([np.sum(i) for i in vae[:, :, :, i, j]])
-            bins = np.linspace(0, np.max(g4_l), 15)
-            n_g4, bins_g4, _ = ax[i][j].hist(g4_l,
-                                             histtype="step",
-                                             label="FullSim",
-                                             bins=bins,
-                                             color="black")
-            n_vae, bins_vae, _ = ax[i][j].hist(vae_l,
-                                               histtype="step",
-                                               label="FastSim",
-                                               bins=bins,
-                                               color="red")
-            ax[i][j].set_title("Layer %s" % cpt, fontsize=12)
-            cpt += 1
-    plt.savefig(
-        f"{save_dir}E_Layer_Geo_{geometry}_E_{energy_particle}_Angle_{angle_particle}.png"
-    )
-    plt.show()
+        Cell energy for a given event (e = 0, ..., NE - 1) is defined by an array with shape (R * PHI * Z) storing
+        values of energy in particular cells.
 
+        Returns:
+            A numpy array of cell energy values with shape = (NE * R * PHI * Z, ).
 
-# Cell energy distribution comparing full and fast simulation data of a single geometry, energy and angle of primary
-# particles
-def cell_energy(g4, vae, energy_particle, angle_particle, geometry, save_dir):
+        """
+        return np.copy(self._input).reshape(-1)
 
-    def log_energy(events, colour, label):
-        all_log_en = []
-        for ev in range(len(events)):
-            energies = events[ev]
-            for en in energies:
-                if en > 0:
-                    all_log_en.append(np.log10(en))
-                else:
-                    all_log_en.append(0)
-        return plt.hist(all_log_en,
-                        bins=np.linspace(-4, 1, 1000),
-                        facecolor=colour,
-                        histtype="step",
-                        label=label)
+    def calc_energy_per_layer(self):
+        """ Calculates total energy detected in a particular layer.
 
-    plt.figure(figsize=(12, 8))
-    log_energy(g4, "b", "FullSim")
-    log_energy(vae, "r", "FastSim")
-    plt.xlabel("log10(E//MeV)")
-    plt.ylim(bottom=1)
-    plt.yscale("log")
-    plt.ylim(bottom=1)
-    plt.ylabel("# entries")
-    plt.grid(True)
-    plt.legend()
-    plt.savefig(
-        f"{save_dir}Cell_E_Dist_Log_Geo_{geometry}_E_{energy_particle}_Angle_{angle_particle}.png"
-    )
-    plt.show()
+        Energy per layer for a given event (e = 0, ..., NE - 1) is defined by an array with shape (Z, ) storing
+        values of total energy detected in a particular layer
+
+        Returns:
+            A numpy array of cell energy values with shape = (NE, Z).
+
+        """
+        return np.sum(self._input, axis=(1, 2))

@@ -70,3 +70,12 @@ Optimizer parameters.
 N_TRIALS = 5
 # Maximum size of a hidden layer
 MAX_HIDDEN_LAYER_DIM = 2000
+
+"""
+Validator parameter.
+"""
+FULL_SIM_HISTOGRAM_COLOR = "red"
+ML_SIM_HISTOGRAM_COLOR = "blue"
+FULL_SIM_GAUSSIAN_COLOR = "green"
+ML_SIM_GAUSSIAN_COLOR = "orange"
+HISTOGRAM_TYPE = "step"

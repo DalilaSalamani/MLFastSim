@@ -177,7 +177,7 @@ class ProfilePlotter(Plotter):
         axes[1].set_ylabel("MLSim/FullSim")
         axes[1].axhline(y=1, color="black")
         plt.savefig(
-            f"{VALID_DIR}{observable_name}_Geo_{self._geometry}_E_{self._particle_energy}_" +
+            f"{VALID_DIR}/{observable_name}_Geo_{self._geometry}_E_{self._particle_energy}_" +
             f"Angle_{self._particle_angle}.png"
         )
         plt.clf()
@@ -308,7 +308,8 @@ class EnergyPlotter(Plotter):
         plt.xlabel("Energy [MeV]")
         plt.ylabel("# events")
         plt.title(f" $e^-$, {self._particle_energy} [GeV], {self._particle_angle}$^{{\circ}}$, {self._geometry} ")
-        plt.savefig(f"{VALID_DIR}E_tot_Geo_{self._geometry}_E_{self._particle_energy}_Angle_{self._particle_angle}.png")
+        plt.savefig(
+            f"{VALID_DIR}/E_tot_Geo_{self._geometry}_E_{self._particle_energy}_Angle_{self._particle_angle}.png")
         plt.clf()
 
     def _plot_cell_energy(self) -> None:
@@ -349,7 +350,7 @@ class EnergyPlotter(Plotter):
         plt.grid(True)
         plt.legend(loc="upper left")
         plt.savefig(
-            f"{VALID_DIR}E_cell_Geo_{self._geometry}_E_{self._particle_energy}_Angle_{self._particle_angle}.png"
+            f"{VALID_DIR}/E_cell_Geo_{self._geometry}_E_{self._particle_energy}_Angle_{self._particle_angle}.png"
         )
         plt.clf()
 
@@ -399,7 +400,7 @@ class EnergyPlotter(Plotter):
         fig.legend(handles, labels, bbox_to_anchor=(1.15, 0.5))
 
         plt.savefig(
-            f"{VALID_DIR}E_layer_Geo_{self._geometry}_E_{self._particle_energy}_Angle_{self._particle_angle}.png",
+            f"{VALID_DIR}/E_layer_Geo_{self._geometry}_E_{self._particle_energy}_Angle_{self._particle_angle}.png",
             bbox_inches="tight")
         plt.clf()
 

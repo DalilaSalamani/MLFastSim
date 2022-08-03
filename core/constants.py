@@ -29,9 +29,9 @@ CHECKPOINT_DIR = "./checkpoint/"
 # Directory to save model after conversion to a format that can be used in C++.
 CONV_DIR = "./conversion/"
 # Directory to save validation plots.
-VALID_DIR = "./validation/"
+VALID_DIR = "./validation"
 # Directory to save VAE generated showers.
-GEN_DIR = "./generation/"
+GEN_DIR = "./generation"
 
 """
 Model default parameters.

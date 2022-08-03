@@ -78,7 +78,7 @@ def _best_fit(data: np.ndarray, bins: np.ndarray) -> Tuple[np.ndarray, np.ndarra
     sigma0 = np.var(xs)
 
     # Fit a Gaussian to the prepared data.
-    (a, mu, sigma), _ = curve_fit(f=_gaussian, xdata=xs, ydata=ys_bar, p0=[a0, mu0, sigma0])
+    (a, mu, sigma), _ = curve_fit(f=_gaussian, xdata=xs, ydata=ys_bar, p0=[a0, mu0, sigma0], method="trf", maxfev=1000)
 
     # Calculate values of an approximation in given points and return values.
     ys = _gaussian(xs, a, mu, sigma)
@@ -162,7 +162,7 @@ class ProfilePlotter(Plotter):
 
         if y_log_scale:
             axes[0].set_yscale("log")
-        axes[0].legend(loc="upper right")
+        axes[0].legend(loc="best")
         axes[0].set_xlabel(xlabel)
         axes[0].set_ylabel("Energy [Mev]")
         axes[0].set_title(
@@ -302,7 +302,7 @@ class EnergyPlotter(Plotter):
                  label="MLSim",
                  bins=bins,
                  color=ML_SIM_HISTOGRAM_COLOR)
-        plt.legend()
+        plt.legend(loc="upper left")
         if y_log_scale:
             plt.yscale("log")
         plt.xlabel("Energy [MeV]")
@@ -347,9 +347,9 @@ class EnergyPlotter(Plotter):
         plt.ylabel("# entries")
         plt.title(f" $e^-$, {self._particle_energy} [GeV], {self._particle_angle}$^{{\circ}}$, {self._geometry} ")
         plt.grid(True)
-        plt.legend()
+        plt.legend(loc="upper left")
         plt.savefig(
-            f"{VALID_DIR}Cell_E_Dist_Log_Geo_{self._geometry}_E_{self._particle_energy}_Angle_{self._particle_angle}.png"
+            f"{VALID_DIR}E_cell_Geo_{self._geometry}_E_{self._particle_energy}_Angle_{self._particle_angle}.png"
         )
         plt.clf()
 
@@ -370,8 +370,7 @@ class EnergyPlotter(Plotter):
                            np.max(full_simulation_energy_per_layer + 10), 25)
 
         fig, ax = plt.subplots(number_of_plots_in_column, number_of_plots_in_row, figsize=(20, 15), sharex="all",
-                               sharey="all")
-        fig.tight_layout()
+                               sharey="all", constrained_layout=True)
 
         for layer_nb in range(N_CELLS_Z):
             i = layer_nb // number_of_plots_in_row
@@ -391,12 +390,17 @@ class EnergyPlotter(Plotter):
             ax[i][j].set_yscale("log")
             ax[i][j].tick_params(axis='both', which='major', labelsize=10)
 
-        fig.supxlabel("Energy [MeV]", fontsize=13)
-        fig.supylabel("# entries", fontsize=13)
+        fig.supxlabel("Energy [MeV]", fontsize=14)
+        fig.supylabel("# entries", fontsize=14)
+        fig.suptitle(f" $e^-$, {self._particle_energy} [GeV], {self._particle_angle}$^{{\circ}}$, {self._geometry} ")
+
+        # Take legend from one plot and make it a global legend.
+        handles, labels = ax[0][0].get_legend_handles_labels()
+        fig.legend(handles, labels, bbox_to_anchor=(1.15, 0.5))
 
         plt.savefig(
-            f"{VALID_DIR}E_Layer_Geo_{self._geometry}_E_{self._particle_energy}_Angle_{self._particle_angle}.png"
-        )
+            f"{VALID_DIR}E_layer_Geo_{self._geometry}_E_{self._particle_energy}_Angle_{self._particle_angle}.png",
+            bbox_inches="tight")
         plt.clf()
 
     def plot_and_save(self):

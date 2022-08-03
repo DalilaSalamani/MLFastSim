@@ -30,7 +30,6 @@ def main():
     vae_energies = np.loadtxt(
         f"{GEN_DIR}VAE_Generated_Geo_{geometry}_E_{particle_energy}_Angle_{particle_angle}.txt"
     ) * (particle_energy * 1000)
-    vae_energies = e_layer_g4
     # Reshape the events into 3D
     e_layer_vae = vae_energies.reshape(len(vae_energies), N_CELLS_R, N_CELLS_PHI, N_CELLS_Z)
 
@@ -48,15 +47,14 @@ def main():
 
     # 4. Plot observables
     longitudinal_profile_plotter = ProfilePlotter(particle_energy, particle_angle, geometry, full_sim_long, ml_sim_long,
-                                                  True)
+                                                  _plot_gaussian=True)
     lateral_profile_plotter = ProfilePlotter(particle_energy, particle_angle,
-                                             geometry, full_sim_lat, ml_sim_lat, True)
+                                             geometry, full_sim_lat, ml_sim_lat, _plot_gaussian=False)
     energy_plotter = EnergyPlotter(particle_energy, particle_angle, geometry, full_sim_energy, ml_sim_energy)
 
     longitudinal_profile_plotter.plot_and_save()
     lateral_profile_plotter.plot_and_save()
     energy_plotter.plot_and_save()
-
     print("Done.")
 
 

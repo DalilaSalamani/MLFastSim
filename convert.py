@@ -8,7 +8,7 @@ import sys
 
 import keras2onnx
 
-from core.constants import CHECKPOINT_DIR
+from core.constants import GLOBAL_CHECKPOINT_DIR
 from core.model import VAEHandler
 
 """
@@ -32,7 +32,7 @@ def main(argv):
     # Instantiate and load a saved model
     vae = VAEHandler()
     # Load the saved weights
-    vae.model.load_weights(f"{CHECKPOINT_DIR}VAE-{epoch}.h5")
+    vae.model.load_weights(f"{GLOBAL_CHECKPOINT_DIR}VAE-{epoch}.h5")
 
     # 2. Convert the model to ONNX format
     # Create the Keras model and convert it into an ONNX model

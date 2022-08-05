@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+import gc
 from dataclasses import dataclass, field
 from typing import List, Any, Dict, Tuple
 
@@ -15,10 +15,9 @@ from tensorflow.python.distribute.distribute_lib import Strategy
 from tensorflow.python.distribute.mirrored_strategy import MirroredStrategy
 
 from core.constants import ORIGINAL_DIM, LATENT_DIM, BATCH_SIZE_PER_REPLICA, EPOCHS, LEARNING_RATE, ACTIVATION, \
-    OUT_ACTIVATION, \
-    OPTIMIZER_TYPE, KERNEL_INITIALIZER, CHECKPOINT_DIR, EARLY_STOP, BIAS_INITIALIZER, PERIOD, \
-    INTERMEDIATE_DIMS, SAVE_MODEL, SAVE_BEST, PATIENCE, MIN_DELTA, BEST_MODEL_FILENAME, NUMBER_OF_K_FOLD_SPLITS, \
-    VALIDATION_SPLIT, GPU_IDS, MAX_GPU_MEMORY_ALLOCATION, BUFFER_SIZE
+    OUT_ACTIVATION, OPTIMIZER_TYPE, KERNEL_INITIALIZER, GLOBAL_CHECKPOINT_DIR, EARLY_STOP, BIAS_INITIALIZER, \
+    INTERMEDIATE_DIMS, SAVE_MODEL_EVERY_N_EPOCHS, SAVE_BEST_MODEL, PATIENCE, MIN_DELTA, BEST_MODEL_FILENAME, \
+    NUMBER_OF_K_FOLD_SPLITS, VALIDATION_SPLIT, GPU_IDS, MAX_GPU_MEMORY_ALLOCATION, BUFFER_SIZE
 from utils.optimizer import OptimizerFactory, OptimizerType
 
 
@@ -137,11 +136,10 @@ class VAEHandler:
     _optimizer_type: OptimizerType = OPTIMIZER_TYPE
     _kernel_initializer: str = KERNEL_INITIALIZER
     _bias_initializer: str = BIAS_INITIALIZER
-    _checkpoint_dir: str = CHECKPOINT_DIR
+    _checkpoint_dir: str = GLOBAL_CHECKPOINT_DIR
     _early_stop: bool = EARLY_STOP
-    _save_model: bool = SAVE_MODEL
-    _save_best: bool = SAVE_BEST
-    _period: int = PERIOD
+    _save_model_every_n_epochs: bool = SAVE_MODEL_EVERY_N_EPOCHS
+    _save_best_model: bool = SAVE_BEST_MODEL
     _patience: int = PATIENCE
     _min_delta: float = MIN_DELTA
     _best_model_filename: str = BEST_MODEL_FILENAME
@@ -150,10 +148,21 @@ class VAEHandler:
     _gpu_ids: str = GPU_IDS
     _max_gpu_memory_allocation: int = MAX_GPU_MEMORY_ALLOCATION
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         # Calculate true batch size.
         self._batch_size = self._batch_size_per_replica * self._strategy.num_replicas_in_sync
+        self._build_and_compile_new_model()
 
+    def _build_and_compile_new_model(self) -> None:
+        """ Builds and compiles a new model.
+
+        VAEHandler keep a list of VAE instance. The reason is that while k-fold cross validation is performed,
+        each fold requires a new, clear instance of model. New model is always added at the end of the list of
+        existing ones.
+
+        Returns: None
+
+        """
         # Build encoder and decoder.
         encoder = self._build_encoder()
         decoder = self._build_decoder()
@@ -259,15 +268,13 @@ class VAEHandler:
                               patience=self._patience,
                               verbose=True,
                               restore_best_weights=True))
-        # If the save model flag is on then save model every (self._period) number of epochs regardless of
-        # performance of the model.
-        if self._save_model:
-            callbacks.append(ModelCheckpoint(filepath=f"{self._checkpoint_dir}VAE-{{epoch:02d}}.tf",
+        if self._save_model_every_n_epochs:
+            callbacks.append(ModelCheckpoint(filepath=f"{self._checkpoint_dir}/VAE_epoch_{{epoch:03}}/model_weights",
                                              monitor="val_total_loss",
                                              verbose=True,
-                                             save_weights_only=False,
+                                             save_weights_only=True,
                                              mode="min",
-                                             period=self._period))
+                                             save_freq="epoch"))
         return callbacks
 
     def _get_train_and_val_data(self, dataset: np.array, e_cond: np.array, angle_cond: np.array, geo_cond: np.array,
@@ -294,8 +301,8 @@ class VAEHandler:
         val_data = (val_dataset, val_e_cond, val_angle_cond, val_geo_cond)
 
         # Wrap data in Dataset objects.
-        train_data = Dataset.from_tensor_slices(tuple(train_data))
-        val_data = Dataset.from_tensor_slices(tuple(val_data))
+        train_data = Dataset.from_tensor_slices(train_data)
+        val_data = Dataset.from_tensor_slices(val_data)
 
         # The batch size must now be set on the Dataset objects.
         train_data = train_data.batch(self._batch_size)
@@ -343,6 +350,8 @@ class VAEHandler:
             train_data, val_data = self._get_train_and_val_data(dataset, e_cond, angle_cond, geo_cond, train_indexes,
                                                                 validation_indexes)
 
+            self._build_and_compile_new_model()
+
             history = self.model.fit(x=train_data,
                                      shuffle=True,
                                      epochs=self._epochs,
@@ -352,9 +361,16 @@ class VAEHandler:
                                      )
             histories.append(history)
 
-            if self._save_best:
-                self.model.save(f"{self._checkpoint_dir}{self._best_model_filename}_{i}.tf")
-                print("Best model was saved.")
+            if self._save_best_model:
+                self.model.save_weights(f"{self._checkpoint_dir}/VAE_fold_{i + 1}/model_weights")
+                print(f"Best model from fold {i + 1} was saved.")
+
+            # Remove all unnecessary data from previous fold.
+            del self.model
+            del train_data
+            del val_data
+            tf.keras.backend.clear_session()
+            gc.collect()
 
         return histories
 
@@ -395,8 +411,8 @@ class VAEHandler:
                                  batch_size=self._batch_size_per_replica,
                                  callbacks=callbacks
                                  )
-        if self._save_best:
-            self.model.save(f"{self._checkpoint_dir}{self._best_model_filename}.tf")
+        if self._save_best_model:
+            self.model.save_weights(f"{self._checkpoint_dir}/VAE_best/model_weights")
             print("Best model was saved.")
 
         return [history]

@@ -1,12 +1,6 @@
-"""
-** preprocess **
-defines the data loading and preprocessing functions 
-"""
-
 import h5py
 import numpy as np
 
-# preprocess function loads the data and returns the array of the shower energies and the condition arrays
 from core.constants import INIT_DIR, ORIGINAL_DIM, MAX_ENERGY, MAX_ANGLE, MIN_ANGLE, MIN_ENERGY
 
 
@@ -65,6 +59,9 @@ def get_condition_arrays(geo, energy_particle, nb_events):
         cond_geo = [[0, 1]] * nb_events
     else:  # geo == "SciPb"
         cond_geo = [[1, 0]] * nb_events
+    cond_e = np.array(cond_e)
+    cond_angle = np.array(cond_angle)
+    cond_geo = np.array(cond_geo)
     return cond_e, cond_angle, cond_geo
 
 
@@ -74,7 +71,6 @@ def get_condition_arrays(geo, energy_particle, nb_events):
     - geo : name of the calorimeter geometry (eg: SiW, SciPb)
     - energy_particle : energy of the primary particle in GeV units
     - angle_particle : angle of the primary particle in degrees
-
 """
 
 

@@ -1,18 +1,19 @@
 from argparse import ArgumentParser
 
 from core.constants import MAX_GPU_MEMORY_ALLOCATION, GPU_IDS
-# Hyperparemeters to be optimized.
 from utils.gpu_limiter import GPULimiter
+from utils.optimizer import OptimizerType
 
-discrete_parameters = {"nb_hidden_layers": (1, 6), "batch_size_per_replica": (50, 200)}
-continuous_parameters = {"learning_rate": (0.0001, 0.01)}
-categorical_parameters = {}
+# Hyperparemeters to be optimized.
+discrete_parameters = {"nb_hidden_layers": (1, 6), "latent_dim": (15, 100)}
+continuous_parameters = {"learning_rate": (0.0001, 0.005)}
+categorical_parameters = {"optimizer_type": [OptimizerType.ADAM, OptimizerType.RMSPROP]}
 
 
 def parse_args():
     argument_parser = ArgumentParser()
     argument_parser.add_argument("--study-name", type=str, default="default_study_name")
-    argument_parser.add_argument("--storage", type=str, default=None)
+    argument_parser.add_argument("--storage", type=str)
     argument_parser.add_argument("--max-gpu-memory-allocation", type=int, default=MAX_GPU_MEMORY_ALLOCATION)
     argument_parser.add_argument("--gpu-ids", type=str, default=GPU_IDS)
     args = argument_parser.parse_args()
@@ -34,18 +35,13 @@ def main():
 
     # This import must be local because otherwise it is impossible to call GPULimiter.
     from utils.hyperparameter_tuner import HyperparameterTuner
-    if storage is None:
-        hyperparameter_tuner = HyperparameterTuner(discrete_parameters, continuous_parameters, categorical_parameters)
-    else:
-
-        hyperparameter_tuner = HyperparameterTuner(discrete_parameters, continuous_parameters, categorical_parameters,
-                                                   storage, study_name)
+    hyperparameter_tuner = HyperparameterTuner(discrete_parameters, continuous_parameters, categorical_parameters,
+                                               storage, study_name)
 
     # 3. Run main tuning function.
     hyperparameter_tuner.tune()
     # Watch out! This script neither deletes the study in DB nor deletes the database itself. If you are using
     # parallelized optimization, then you should care about deleting study in the database by yourself.
-    # TODO(@mdragula): Implement cleaning when all processes are done.
 
 
 if __name__ == "__main__":

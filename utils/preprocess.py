@@ -58,6 +58,9 @@ def get_condition_arrays(geo, energy_particle, nb_events):
         cond_geo = [[0, 1]] * nb_events
     else:  # geo == "SciPb"
         cond_geo = [[1, 0]] * nb_events
+    cond_e = np.array(cond_e)
+    cond_angle = np.array(cond_angle)
+    cond_geo = np.array(cond_geo)
     return cond_e, cond_angle, cond_geo
 
 

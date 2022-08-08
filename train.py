@@ -1,6 +1,6 @@
 from argparse import ArgumentParser
 
-from core.constants import GPU_IDS, MAX_GPU_MEMORY_ALLOCATION
+from core.constants import GPU_IDS, MAX_GPU_MEMORY_ALLOCATION, GLOBAL_CHECKPOINT_DIR
 from utils.gpu_limiter import GPULimiter
 from utils.preprocess import preprocess
 
@@ -9,6 +9,7 @@ def parse_args():
     argument_parser = ArgumentParser()
     argument_parser.add_argument("--max-gpu-memory-allocation", type=int, default=MAX_GPU_MEMORY_ALLOCATION)
     argument_parser.add_argument("--gpu-ids", type=str, default=GPU_IDS)
+    argument_parser.add_argument("--study-name", type=str, default="default_study_name")
     args = argument_parser.parse_args()
     return args
 
@@ -18,6 +19,8 @@ def main():
     args = parse_args()
     max_gpu_memory_allocation = args.max_gpu_memory_allocation
     gpu_ids = args.gpu_ids
+    study_name = args.study_name
+    checkpoint_dir = f"{GLOBAL_CHECKPOINT_DIR}/{study_name}"
 
     # 1. Set GPU memory limits.
     GPULimiter(_gpu_ids=gpu_ids, _max_gpu_memory_allocation=max_gpu_memory_allocation)()
@@ -32,8 +35,8 @@ def main():
 
     # This import must be local because otherwise it is impossible to call GPULimiter.
     from core.model import VAEHandler
-    vae = VAEHandler(_number_of_k_fold_splits=1, _epochs=50, _learning_rate=0.01, _batch_size_per_replica=128,
-                     _early_stop=False)
+    vae = VAEHandler(_number_of_k_fold_splits=1, _epochs=5, _learning_rate=0.01, _batch_size_per_replica=128,
+                     _early_stop=False, _checkpoint_dir=checkpoint_dir)
 
     # 4. Train model.
     histories = vae.train(energies_train,

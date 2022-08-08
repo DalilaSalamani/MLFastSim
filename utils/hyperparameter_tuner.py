@@ -2,14 +2,14 @@ from dataclasses import dataclass
 from typing import Tuple, Dict, Any, List
 
 import numpy as np
-import tensorflow as tf
 from optuna import Trial, create_study, get_all_study_summaries, load_study
 from optuna.pruners import MedianPruner
+from optuna.samplers import TPESampler
 from optuna.trial import TrialState
 
 from core.constants import LEARNING_RATE, BATCH_SIZE_PER_REPLICA, ACTIVATION, OUT_ACTIVATION, \
     OPTIMIZER_TYPE, KERNEL_INITIALIZER, BIAS_INITIALIZER, N_TRIALS, LATENT_DIM, \
-    INTERMEDIATE_DIMS, MAX_HIDDEN_LAYER_DIM
+    INTERMEDIATE_DIMS, MAX_HIDDEN_LAYER_DIM, GLOBAL_CHECKPOINT_DIR
 from core.model import VAEHandler
 from utils.preprocess import preprocess
 
@@ -58,14 +58,13 @@ class HyperparameterTuner:
                 self._study = load_study(self._study_name, self._storage)
             else:
                 # The study does not exist in the database. Create a new one.
-                self._study = create_study(storage=self._storage, sampler=None, pruner=MedianPruner(),
-                                           study_name=self._study_name,
-                                           direction="minimize")
+                self._study = create_study(storage=self._storage, sampler=TPESampler(), pruner=MedianPruner(),
+                                           study_name=self._study_name, direction="minimize")
         else:
             # Single optimization
-            self._study = create_study(sampler=None, pruner=MedianPruner(), direction="minimize")
+            self._study = create_study(sampler=TPESampler(), pruner=MedianPruner(), direction="minimize")
 
-    def _create_model(self, trial: Trial) -> VAEHandler:
+    def _create_model_handler(self, trial: Trial) -> VAEHandler:
         """For a given trail builds the model.
 
         Optuna suggests parameters like dimensions of particular layers of the model, learning rate, optimizer, etc.
@@ -76,6 +75,8 @@ class HyperparameterTuner:
         Returns:
             Variational Autoencoder (VAE)
         """
+        # TODO(@mdragula): This method can currently only return VAEHandler. It would be good to write it in such
+        #  way, that can create an arbitrary Handler.
 
         # Discrete parameters
         if "latent_dim" in self._discrete_parameters.keys():
@@ -148,6 +149,8 @@ class HyperparameterTuner:
         else:
             bias_initializer = BIAS_INITIALIZER
 
+        checkpoint_dir = f"{GLOBAL_CHECKPOINT_DIR}/{self._study_name}/trial_{trial.number:03d}"
+
         return VAEHandler(_batch_size_per_replica=batch_size_per_replica,
                           _intermediate_dims=intermediate_dims,
                           latent_dim=latent_dim,
@@ -157,9 +160,11 @@ class HyperparameterTuner:
                           _optimizer_type=optimizer_type,
                           _kernel_initializer=kernel_initializer,
                           _bias_initializer=bias_initializer,
+                          _checkpoint_dir=checkpoint_dir,
                           _early_stop=True,
-                          _save_best=True,
-                          _best_model_filename=f"VAE_best_trial_{trial.number}")
+                          _save_model_every_n_epochs=False,
+                          _save_best_model=True,
+                          )
 
     def _objective(self, trial: Trial) -> float:
         """For a given trial trains the model and returns an average validation loss.
@@ -172,15 +177,13 @@ class HyperparameterTuner:
         of the dataset.
         """
 
-        tf.keras.backend.clear_session()
-
         # Generate the trial model.
-        model = self._create_model(trial)
+        model_handler = self._create_model_handler(trial)
 
         # Train the model.
         verbose = True
-        histories = model.train(self._energies_train, self._cond_e_train, self._cond_angle_train, self._cond_geo_train,
-                                verbose)
+        histories = model_handler.train(self._energies_train, self._cond_e_train, self._cond_angle_train,
+                                        self._cond_geo_train, verbose)
 
         # Return validation loss (currently it is treated as an objective goal). Notice that we take into account the
         # best model according to the validation loss.

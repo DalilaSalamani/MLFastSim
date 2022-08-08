@@ -29,9 +29,9 @@ CHECKPOINT_DIR = "./checkpoint/"
 # Directory to save model after conversion to a format that can be used in C++.
 CONV_DIR = "./conversion/"
 # Directory to save validation plots.
-VALID_DIR = "./validation/"
+VALID_DIR = "./validation"
 # Directory to save VAE generated showers.
-GEN_DIR = "./generation/"
+GEN_DIR = "./generation"
 
 """
 Model default parameters.
@@ -70,3 +70,12 @@ Optimizer parameters.
 N_TRIALS = 5
 # Maximum size of a hidden layer
 MAX_HIDDEN_LAYER_DIM = 2000
+
+"""
+Validator parameter.
+"""
+FULL_SIM_HISTOGRAM_COLOR = "blue"
+ML_SIM_HISTOGRAM_COLOR = "red"
+FULL_SIM_GAUSSIAN_COLOR = "green"
+ML_SIM_GAUSSIAN_COLOR = "orange"
+HISTOGRAM_TYPE = "step"

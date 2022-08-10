@@ -35,8 +35,7 @@ def main():
 
     # This import must be local because otherwise it is impossible to call GPULimiter.
     from core.model import VAEHandler
-    vae = VAEHandler(_number_of_k_fold_splits=1, _epochs=5, _learning_rate=0.01, _batch_size_per_replica=128,
-                     _early_stop=False, _checkpoint_dir=checkpoint_dir)
+    vae = VAEHandler(_checkpoint_dir=checkpoint_dir)
 
     # 4. Train model.
     histories = vae.train(energies_train,

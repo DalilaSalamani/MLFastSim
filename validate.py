@@ -28,9 +28,8 @@ def main():
                               particle_angle)
     # 2. Fast simulation data loading, scaling to original energy range & reshaping
     vae_energies = np.load(f"{GEN_DIR}/VAE_Generated_Geo_{geometry}_E_{particle_energy}_Angle_{particle_angle}.npy")
-    vae_energies = vae_energies * (particle_energy * 1000)
     # Reshape the events into 3D
-    e_layer_vae = vae_energies.reshape(len(vae_energies), N_CELLS_R, N_CELLS_PHI, N_CELLS_Z)
+    e_layer_vae = vae_energies.reshape((len(vae_energies), N_CELLS_R, N_CELLS_PHI, N_CELLS_Z))
 
     print("Data has been loaded.")
 

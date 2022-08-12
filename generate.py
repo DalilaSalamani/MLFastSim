@@ -20,7 +20,7 @@ def parse_args():
     p.add_argument("--angle", type=int, default="")
     p.add_argument("--events", type=int, default=10000)
     p.add_argument("--epoch", type=int, default=None)
-    p.add_argument("--study-name", type=str)
+    p.add_argument("--study-name", type=str, default="default_study_name")
     args = p.parse_args()
     return args
 

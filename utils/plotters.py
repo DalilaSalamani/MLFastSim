@@ -291,7 +291,8 @@ class EnergyPlotter(Plotter):
         ml_simulation_total_energy = self._ml_simulation.calc_total_energy()
 
         plt.figure(figsize=(12, 8))
-        bins = np.linspace(np.min(full_simulation_total_energy), np.max(ml_simulation_total_energy), 50)
+        bins = np.linspace(np.min(full_simulation_total_energy) - np.min(full_simulation_total_energy) * 0.05,
+                           np.max(full_simulation_total_energy) + np.max(full_simulation_total_energy) * 0.05, 50)
         plt.hist(x=full_simulation_total_energy,
                  histtype=HISTOGRAM_TYPE,
                  label="FullSim",

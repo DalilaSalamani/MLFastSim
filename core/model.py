@@ -1,23 +1,25 @@
 import gc
 from dataclasses import dataclass, field
-from typing import List, Tuple
+from typing import List, Any, Dict, Tuple
 
 import numpy as np
 import tensorflow as tf
-from keras import backend as K
+import wandb
 from sklearn.model_selection import KFold
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, History, Callback
 from tensorflow.keras.layers import BatchNormalization, Input, Dense, Layer, concatenate
-from tensorflow.keras.losses import BinaryCrossentropy, Reduction
+from tensorflow.keras.losses import binary_crossentropy
+from tensorflow.keras.metrics import Mean
 from tensorflow.keras.models import Model
 from tensorflow.python.data import Dataset
 from tensorflow.python.distribute.distribute_lib import Strategy
 from tensorflow.python.distribute.mirrored_strategy import MirroredStrategy
+from wandb.keras import WandbCallback
 
 from core.constants import ORIGINAL_DIM, LATENT_DIM, BATCH_SIZE_PER_REPLICA, EPOCHS, LEARNING_RATE, ACTIVATION, \
     OUT_ACTIVATION, OPTIMIZER_TYPE, KERNEL_INITIALIZER, GLOBAL_CHECKPOINT_DIR, EARLY_STOP, BIAS_INITIALIZER, \
-    INTERMEDIATE_DIMS, SAVE_MODEL_EVERY_N_EPOCHS, SAVE_BEST_MODEL, PATIENCE, MIN_DELTA, BEST_MODEL_FILENAME, \
-    NUMBER_OF_K_FOLD_SPLITS, VALIDATION_SPLIT, GPU_IDS, MAX_GPU_MEMORY_ALLOCATION, BUFFER_SIZE
+    INTERMEDIATE_DIMS, SAVE_MODEL_EVERY_EPOCH, SAVE_BEST_MODEL, PATIENCE, MIN_DELTA, BEST_MODEL_FILENAME, \
+    NUMBER_OF_K_FOLD_SPLITS, VALIDATION_SPLIT, GPU_IDS, MAX_GPU_MEMORY_ALLOCATION, BUFFER_SIZE, WANDB_ENTITY
 from utils.optimizer import OptimizerFactory, OptimizerType
 
 
@@ -30,20 +32,24 @@ class _Sampling(Layer):
 
     def __call__(self, inputs, **kwargs):
         z_mean, z_log_var = inputs
-        z_sigma = K.exp(0.5 * z_log_var)
-        epsilon = K.random_normal(tf.shape(z_sigma))
+        z_sigma = tf.math.exp(0.5 * z_log_var)
+        epsilon = tf.random.normal(tf.shape(z_sigma))
         return z_mean + z_sigma * epsilon
 
 
-# KL divergence computation
-class _KLDivergenceLayer(Layer):
+class _Reparametrize(Layer):
+    """
+    Custom layer to do the reparameterization trick: sample random latent vectors z from the latent Gaussian
+    distribution.
 
-    def call(self, inputs, **kwargs):
-        mu, log_var = inputs
-        kl_loss = -0.5 * (1 + log_var - K.square(mu) - K.exp(log_var))
-        kl_loss = K.mean(K.sum(kl_loss))
-        self.add_loss(kl_loss)
-        return inputs
+    The sampled vector z is given by sampled_z = mean + std * epsilon
+    """
+
+    def __call__(self, inputs, **kwargs):
+        z_mean, z_log_var = inputs
+        z_sigma = tf.math.exp(0.5 * z_log_var)
+        epsilon = tf.random.normal(tf.shape(z_sigma))
+        return z_mean + z_sigma * epsilon
 
 
 class VAE(Model):
@@ -55,7 +61,7 @@ class VAE(Model):
 
     def call(self, inputs, training=None, mask=None):
         _, e_input, angle_input, geo_input = inputs
-        z = self.encoder(inputs)
+        z, _, _ = self.encoder(inputs)
         return self.decoder([z, e_input, angle_input, geo_input])
 
     def __init__(self, encoder, decoder, **kwargs):
@@ -63,6 +69,56 @@ class VAE(Model):
         self.encoder = encoder
         self.decoder = decoder
         self._set_inputs(inputs=self.encoder.inputs, outputs=self(self.encoder.inputs))
+        self.total_loss_tracker = Mean(name="total_loss")
+        self.val_total_loss_tracker = Mean(name="val_total_loss")
+
+    @property
+    def metrics(self):
+        return [self.total_loss_tracker, self.val_total_loss_tracker]
+
+    def _perform_step(self, data: Any) -> Tuple[float, float, float]:
+        # Unpack data.
+        x_input, e_input, angle_input, geo_input = data
+        # Encode data and get new probability distribution with a vector z sampled from it.
+        z_mean, z_log_var, z = self.encoder([x_input, e_input, angle_input, geo_input])
+        # Reconstruct the original data.
+        reconstruction = self.decoder([z, e_input, angle_input, geo_input])
+
+        # Reshape data.
+        x_input = tf.expand_dims(x_input, -1)
+        reconstruction = tf.expand_dims(reconstruction, -1)
+
+        # Calculate reconstruction loss.
+        reconstruction_loss = tf.reduce_mean(
+            tf.reduce_sum(binary_crossentropy(x_input, reconstruction), axis=1))
+
+        # Calculate Kullback-Leibler divergence.
+        kl_loss = -0.5 * (1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var))
+        kl_loss = tf.reduce_mean(tf.reduce_sum(kl_loss, axis=1))
+
+        # Calculated weighted total loss (ORIGINAL_DIM is a weight).
+        total_loss = ORIGINAL_DIM * reconstruction_loss + kl_loss
+
+        return total_loss, reconstruction_loss, kl_loss
+
+    def train_step(self, data: Any) -> Dict[str, object]:
+        with tf.GradientTape() as tape:
+            # Perform step, backpropagate it through the network and update the tracker.
+            total_loss, reconstruction_loss, kl_loss = self._perform_step(data)
+
+            grads = tape.gradient(total_loss, self.trainable_weights)
+            self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
+            self.total_loss_tracker.update_state(total_loss)
+
+        return {"total_loss": self.total_loss_tracker.result()}
+
+    def test_step(self, data: Any) -> Dict[str, object]:
+        # Perform step and update the tracker (no backpropagation).
+        val_total_loss, val_reconstruction_loss, val_kl_loss = self._perform_step(data)
+
+        self.val_total_loss_tracker.update_state(val_total_loss)
+
+        return {"total_loss": self.val_total_loss_tracker.result()}
 
 
 @dataclass
@@ -70,6 +126,8 @@ class VAEHandler:
     """
     Class to handle building and training VAE models.
     """
+    _wandb_project_name: str
+    _wandb_tags: List[str] = field(default_factory=list)
     _original_dim: int = ORIGINAL_DIM
     latent_dim: int = LATENT_DIM
     _batch_size_per_replica: int = BATCH_SIZE_PER_REPLICA
@@ -84,7 +142,7 @@ class VAEHandler:
     _bias_initializer: str = BIAS_INITIALIZER
     _checkpoint_dir: str = GLOBAL_CHECKPOINT_DIR
     _early_stop: bool = EARLY_STOP
-    _save_model_every_n_epochs: bool = SAVE_MODEL_EVERY_N_EPOCHS
+    _save_model_every_epoch: bool = SAVE_MODEL_EVERY_EPOCH
     _save_best_model: bool = SAVE_BEST_MODEL
     _patience: int = PATIENCE
     _min_delta: float = MIN_DELTA
@@ -98,6 +156,22 @@ class VAEHandler:
         # Calculate true batch size.
         self._batch_size = self._batch_size_per_replica * self._strategy.num_replicas_in_sync
         self._build_and_compile_new_model()
+        # Setup Wandb.
+        self._setup_wandb()
+
+    def _setup_wandb(self) -> None:
+        config = {
+            "learning_rate": self._learning_rate,
+            "batch_size": self._batch_size,
+            "epochs": self._epochs,
+            "optimizer_type": self._optimizer_type,
+            "intermediate_dims": self._intermediate_dims,
+            "latent_dim": self.latent_dim
+        }
+        # Reinit flag is needed for hyperparameter tuning. Whenever new training is started, new Wandb run should be
+        # created.
+        wandb.init(project=self._wandb_project_name, entity=WANDB_ENTITY, reinit=True, config=config,
+                   tags=self._wandb_tags)
 
     def _build_and_compile_new_model(self) -> None:
         """ Builds and compiles a new model.
@@ -119,8 +193,8 @@ class VAEHandler:
             self.model = VAE(encoder, decoder)
             # Manufacture an optimizer and compile model with.
             optimizer = OptimizerFactory.create_optimizer(self._optimizer_type, self._learning_rate)
-            reconstruction_loss = BinaryCrossentropy(reduction=Reduction.SUM)
-            self.model.compile(optimizer=optimizer, loss=[reconstruction_loss], loss_weights=[ORIGINAL_DIM])
+            self.model.compile(optimizer=optimizer,
+                               metrics=[self.model.total_loss_tracker, self.model.val_total_loss_tracker])
 
     def _prepare_input_layers(self, for_encoder: bool) -> Tuple[Input, Input, Input, Input]:
         """
@@ -163,12 +237,10 @@ class VAEHandler:
             # and log(variance).
             z_mean = Dense(self.latent_dim, name="z_mean")(x)
             z_log_var = Dense(self.latent_dim, name="z_log_var")(x)
-            # Add KLDivergenceLayer responsible for calculation of KL loss.
-            z_mean, z_log_var = _KLDivergenceLayer()([z_mean, z_log_var])
             # Sample a probe from the distribution.
-            encoder_output = _Sampling()([z_mean, z_log_var])
+            z = _Sampling()([z_mean, z_log_var])
             # Create model.
-            encoder = Model(inputs=[x_input, e_input, angle_input, geo_input], outputs=encoder_output,
+            encoder = Model(inputs=[x_input, e_input, angle_input, geo_input], outputs=[z_mean, z_log_var, z],
                             name="encoder")
         return encoder
 
@@ -206,9 +278,9 @@ class VAEHandler:
             A list of `Callback` objects.
 
         """
+        callbacks = []
         # If the early stopping flag is on then stop the training when a monitored metric (validation) has stopped
         # improving after (patience) number of epochs.
-        callbacks = []
         if self._early_stop:
             callbacks.append(
                 EarlyStopping(monitor="val_total_loss",
@@ -216,13 +288,17 @@ class VAEHandler:
                               patience=self._patience,
                               verbose=True,
                               restore_best_weights=True))
-        if self._save_model_every_n_epochs:
+        # Save model after every epoch.
+        if self._save_model_every_epoch:
             callbacks.append(ModelCheckpoint(filepath=f"{self._checkpoint_dir}/VAE_epoch_{{epoch:03}}/model_weights",
                                              monitor="val_total_loss",
                                              verbose=True,
                                              save_weights_only=True,
                                              mode="min",
                                              save_freq="epoch"))
+        # Pass metadata to wandb.
+        callbacks.append(WandbCallback(
+            monitor="val_loss", verbose=0, mode="auto", save_model=False))
         return callbacks
 
     def _get_train_and_val_data(self, dataset: np.array, e_cond: np.array, angle_cond: np.array, geo_cond: np.array,
@@ -245,14 +321,12 @@ class VAEHandler:
         val_geo_cond = geo_cond[validation_indexes, :]
 
         # Gather them into tuples.
-        train_x = (train_dataset, train_e_cond, train_angle_cond, train_geo_cond)
-        train_y = train_dataset
-        val_x = (val_dataset, val_e_cond, val_angle_cond, val_geo_cond)
-        val_y = val_dataset
+        train_data = (train_dataset, train_e_cond, train_angle_cond, train_geo_cond)
+        val_data = (val_dataset, val_e_cond, val_angle_cond, val_geo_cond)
 
         # Wrap data in Dataset objects.
-        train_data = Dataset.from_tensor_slices((train_x, train_y))
-        val_data = Dataset.from_tensor_slices((val_x, val_y))
+        train_data = Dataset.from_tensor_slices(train_data)
+        val_data = Dataset.from_tensor_slices(val_data)
 
         # The batch size must now be set on the Dataset objects.
         train_data = train_data.batch(self._batch_size)
@@ -357,7 +431,7 @@ class VAEHandler:
                                  shuffle=True,
                                  epochs=self._epochs,
                                  verbose=verbose,
-                                 validation_data=val_data,
+                                 validation_data=(val_data, None),
                                  batch_size=self._batch_size_per_replica,
                                  callbacks=callbacks
                                  )

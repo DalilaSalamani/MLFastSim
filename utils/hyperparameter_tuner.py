@@ -151,7 +151,9 @@ class HyperparameterTuner:
 
         checkpoint_dir = f"{GLOBAL_CHECKPOINT_DIR}/{self._study_name}/trial_{trial.number:03d}"
 
-        return VAEHandler(_batch_size_per_replica=batch_size_per_replica,
+        return VAEHandler(_wandb_project_name=self._study_name,
+                          _wandb_tags=["hyperparameter tuning", f"trial {trial.number}"],
+                          _batch_size_per_replica=batch_size_per_replica,
                           _intermediate_dims=intermediate_dims,
                           latent_dim=latent_dim,
                           _learning_rate=learning_rate,
@@ -162,7 +164,7 @@ class HyperparameterTuner:
                           _bias_initializer=bias_initializer,
                           _checkpoint_dir=checkpoint_dir,
                           _early_stop=True,
-                          _save_model_every_n_epochs=False,
+                          _save_model_every_epoch=False,
                           _save_best_model=True,
                           )
 

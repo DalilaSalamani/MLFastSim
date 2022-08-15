@@ -52,7 +52,7 @@ KERNEL_INITIALIZER = "RandomNormal"
 BIAS_INITIALIZER = "Zeros"
 EARLY_STOP = False
 SAVE_BEST_MODEL = True
-SAVE_MODEL_EVERY_N_EPOCHS = True
+SAVE_MODEL_EVERY_EPOCH = True
 PATIENCE = 10
 MIN_DELTA = 0.01
 BEST_MODEL_FILENAME = "VAE_best"
@@ -78,3 +78,9 @@ ML_SIM_HISTOGRAM_COLOR = "red"
 FULL_SIM_GAUSSIAN_COLOR = "green"
 ML_SIM_GAUSSIAN_COLOR = "orange"
 HISTOGRAM_TYPE = "step"
+
+"""
+W&B parameters.
+"""
+# Change this to your entity name.
+WANDB_ENTITY = "entity-name"

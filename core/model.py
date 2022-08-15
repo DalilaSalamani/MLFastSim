@@ -4,6 +4,7 @@ from typing import List, Any, Dict, Tuple
 
 import numpy as np
 import tensorflow as tf
+import wandb
 from sklearn.model_selection import KFold
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, History, Callback
 from tensorflow.keras.layers import BatchNormalization, Input, Dense, Layer, concatenate
@@ -13,11 +14,12 @@ from tensorflow.keras.models import Model
 from tensorflow.python.data import Dataset
 from tensorflow.python.distribute.distribute_lib import Strategy
 from tensorflow.python.distribute.mirrored_strategy import MirroredStrategy
+from wandb.keras import WandbCallback
 
 from core.constants import ORIGINAL_DIM, LATENT_DIM, BATCH_SIZE_PER_REPLICA, EPOCHS, LEARNING_RATE, ACTIVATION, \
     OUT_ACTIVATION, OPTIMIZER_TYPE, KERNEL_INITIALIZER, GLOBAL_CHECKPOINT_DIR, EARLY_STOP, BIAS_INITIALIZER, \
-    INTERMEDIATE_DIMS, SAVE_MODEL_EVERY_N_EPOCHS, SAVE_BEST_MODEL, PATIENCE, MIN_DELTA, BEST_MODEL_FILENAME, \
-    NUMBER_OF_K_FOLD_SPLITS, VALIDATION_SPLIT, GPU_IDS, MAX_GPU_MEMORY_ALLOCATION, BUFFER_SIZE
+    INTERMEDIATE_DIMS, SAVE_MODEL_EVERY_EPOCH, SAVE_BEST_MODEL, PATIENCE, MIN_DELTA, BEST_MODEL_FILENAME, \
+    NUMBER_OF_K_FOLD_SPLITS, VALIDATION_SPLIT, GPU_IDS, MAX_GPU_MEMORY_ALLOCATION, BUFFER_SIZE, WANDB_ENTITY
 from utils.optimizer import OptimizerFactory, OptimizerType
 
 
@@ -124,6 +126,8 @@ class VAEHandler:
     """
     Class to handle building and training VAE models.
     """
+    _wandb_project_name: str
+    _wandb_tags: List[str] = field(default_factory=list)
     _original_dim: int = ORIGINAL_DIM
     latent_dim: int = LATENT_DIM
     _batch_size_per_replica: int = BATCH_SIZE_PER_REPLICA
@@ -138,7 +142,7 @@ class VAEHandler:
     _bias_initializer: str = BIAS_INITIALIZER
     _checkpoint_dir: str = GLOBAL_CHECKPOINT_DIR
     _early_stop: bool = EARLY_STOP
-    _save_model_every_n_epochs: bool = SAVE_MODEL_EVERY_N_EPOCHS
+    _save_model_every_epoch: bool = SAVE_MODEL_EVERY_EPOCH
     _save_best_model: bool = SAVE_BEST_MODEL
     _patience: int = PATIENCE
     _min_delta: float = MIN_DELTA
@@ -152,6 +156,22 @@ class VAEHandler:
         # Calculate true batch size.
         self._batch_size = self._batch_size_per_replica * self._strategy.num_replicas_in_sync
         self._build_and_compile_new_model()
+        # Setup Wandb.
+        self._setup_wandb()
+
+    def _setup_wandb(self) -> None:
+        config = {
+            "learning_rate": self._learning_rate,
+            "batch_size": self._batch_size,
+            "epochs": self._epochs,
+            "optimizer_type": self._optimizer_type,
+            "intermediate_dims": self._intermediate_dims,
+            "latent_dim": self.latent_dim
+        }
+        # Reinit flag is needed for hyperparameter tuning. Whenever new training is started, new Wandb run should be
+        # created.
+        wandb.init(project=self._wandb_project_name, entity=WANDB_ENTITY, reinit=True, config=config,
+                   tags=self._wandb_tags)
 
     def _build_and_compile_new_model(self) -> None:
         """ Builds and compiles a new model.
@@ -258,9 +278,9 @@ class VAEHandler:
             A list of `Callback` objects.
 
         """
+        callbacks = []
         # If the early stopping flag is on then stop the training when a monitored metric (validation) has stopped
         # improving after (patience) number of epochs.
-        callbacks = []
         if self._early_stop:
             callbacks.append(
                 EarlyStopping(monitor="val_total_loss",
@@ -268,13 +288,17 @@ class VAEHandler:
                               patience=self._patience,
                               verbose=True,
                               restore_best_weights=True))
-        if self._save_model_every_n_epochs:
+        # Save model after every epoch.
+        if self._save_model_every_epoch:
             callbacks.append(ModelCheckpoint(filepath=f"{self._checkpoint_dir}/VAE_epoch_{{epoch:03}}/model_weights",
                                              monitor="val_total_loss",
                                              verbose=True,
                                              save_weights_only=True,
                                              mode="min",
                                              save_freq="epoch"))
+        # Pass metadata to wandb.
+        callbacks.append(WandbCallback(
+            monitor="val_loss", verbose=0, mode="auto", save_model=False))
         return callbacks
 
     def _get_train_and_val_data(self, dataset: np.array, e_cond: np.array, angle_cond: np.array, geo_cond: np.array,

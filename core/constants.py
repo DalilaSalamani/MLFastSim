@@ -13,10 +13,10 @@ SIZE_R = 2.325
 SIZE_Z = 3.4
 
 # Minimum and maximum primary particle energy to consider for training in GeV units.
-MIN_ENERGY = 1
-MAX_ENERGY = 1024
+MIN_ENERGY = 64
+MAX_ENERGY = 64
 # Minimum and maximum primary particle angle to consider for training in degrees units.
-MIN_ANGLE = 50
+MIN_ANGLE = 90
 MAX_ANGLE = 90
 
 """
@@ -83,4 +83,4 @@ HISTOGRAM_TYPE = "step"
 W&B parameters.
 """
 # Change this to your entity name.
-WANDB_ENTITY = "entity-name"
+WANDB_ENTITY = "mlfastsim"

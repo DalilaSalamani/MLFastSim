@@ -11,7 +11,7 @@ def preprocess():
     cond_angle_train = []
     cond_geo_train = []
     # This example is trained using 2 detector geometries
-    for geo in ["SiW", "SciPb"]:
+    for geo in ["SiW", ]:
         dir_geo = INIT_DIR + geo + "/"
         # loop over the angles in a step of 10
         for angle_particle in range(MIN_ANGLE, MAX_ANGLE + 10, 10):

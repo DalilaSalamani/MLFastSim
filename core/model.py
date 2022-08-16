@@ -5,8 +5,8 @@ from typing import List, Tuple
 import numpy as np
 import tensorflow as tf
 import wandb
-from tensorflow.keras import backend as K
 from sklearn.model_selection import KFold
+from tensorflow.keras import backend as K
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, History, Callback
 from tensorflow.keras.layers import BatchNormalization, Input, Dense, Layer, concatenate
 from tensorflow.keras.losses import BinaryCrossentropy, Reduction
@@ -19,7 +19,7 @@ from wandb.keras import WandbCallback
 from core.constants import ORIGINAL_DIM, LATENT_DIM, BATCH_SIZE_PER_REPLICA, EPOCHS, LEARNING_RATE, ACTIVATION, \
     OUT_ACTIVATION, OPTIMIZER_TYPE, KERNEL_INITIALIZER, GLOBAL_CHECKPOINT_DIR, EARLY_STOP, BIAS_INITIALIZER, \
     INTERMEDIATE_DIMS, SAVE_MODEL_EVERY_EPOCH, SAVE_BEST_MODEL, PATIENCE, MIN_DELTA, BEST_MODEL_FILENAME, \
-    NUMBER_OF_K_FOLD_SPLITS, VALIDATION_SPLIT, GPU_IDS, MAX_GPU_MEMORY_ALLOCATION, BUFFER_SIZE, WANDB_ENTITY
+    NUMBER_OF_K_FOLD_SPLITS, VALIDATION_SPLIT, WANDB_ENTITY
 from utils.optimizer import OptimizerFactory, OptimizerType
 
 
@@ -31,9 +31,8 @@ class _Sampling(Layer):
     """
 
     def __call__(self, inputs, **kwargs):
-        z_mean, z_log_var = inputs
+        z_mean, z_log_var, epsilon = inputs
         z_sigma = K.exp(0.5 * z_log_var)
-        epsilon = K.random_normal(tf.shape(z_sigma))
         return z_mean + z_sigma * epsilon
 
 
@@ -43,7 +42,7 @@ class _KLDivergenceLayer(Layer):
     def call(self, inputs, **kwargs):
         mu, log_var = inputs
         kl_loss = -0.5 * (1 + log_var - K.square(mu) - K.exp(log_var))
-        kl_loss = K.mean(K.sum(kl_loss))
+        kl_loss = K.mean(K.sum(kl_loss, axis=-1))
         self.add_loss(kl_loss)
         return inputs
 
@@ -56,7 +55,7 @@ class VAE(Model):
         return config
 
     def call(self, inputs, training=None, mask=None):
-        _, e_input, angle_input, geo_input = inputs
+        _, e_input, angle_input, geo_input, _ = inputs
         z = self.encoder(inputs)
         return self.decoder([z, e_input, angle_input, geo_input])
 
@@ -95,8 +94,6 @@ class VAEHandler:
     _best_model_filename: str = BEST_MODEL_FILENAME
     _validation_split: float = VALIDATION_SPLIT
     _strategy: Strategy = MirroredStrategy()
-    _gpu_ids: str = GPU_IDS
-    _max_gpu_memory_allocation: int = MAX_GPU_MEMORY_ALLOCATION
 
     def __post_init__(self) -> None:
         # Calculate true batch size.
@@ -143,7 +140,7 @@ class VAEHandler:
             reconstruction_loss = BinaryCrossentropy(reduction=Reduction.SUM)
             self.model.compile(optimizer=optimizer, loss=[reconstruction_loss], loss_weights=[ORIGINAL_DIM])
 
-    def _prepare_input_layers(self, for_encoder: bool) -> Tuple[Input, Input, Input, Input]:
+    def _prepare_input_layers(self, for_encoder: bool) -> List[Input]:
         """
         Create four Input layers. Each of them is responsible to take respectively: batch of showers/batch of latent
         vectors, batch of energies, batch of angles, batch of geometries.
@@ -152,14 +149,19 @@ class VAEHandler:
             for_encoder: Boolean which decides whether an input is full dimensional shower or a latent vector.
 
         Returns:
-            Tuple of four Input layers.
+            List of Input layers (five for encoder and four for decoder).
 
         """
-        x_input = Input(shape=self._original_dim) if for_encoder else Input(shape=self.latent_dim)
         e_input = Input(shape=(1,))
         angle_input = Input(shape=(1,))
         geo_input = Input(shape=(2,))
-        return x_input, e_input, angle_input, geo_input
+        if for_encoder:
+            x_input = Input(shape=self._original_dim)
+            eps_input = Input(shape=self.latent_dim)
+            return [x_input, e_input, angle_input, geo_input, eps_input]
+        else:
+            x_input = Input(shape=self.latent_dim)
+            return [x_input, e_input, angle_input, geo_input]
 
     def _build_encoder(self) -> Model:
         """ Based on a list of intermediate dimensions, activation function and initializers for kernel and bias builds
@@ -172,7 +174,7 @@ class VAEHandler:
 
         with self._strategy.scope():
             # Prepare input layer.
-            x_input, e_input, angle_input, geo_input = self._prepare_input_layers(for_encoder=True)
+            x_input, e_input, angle_input, geo_input, eps_input = self._prepare_input_layers(for_encoder=True)
             x = concatenate([x_input, e_input, angle_input, geo_input])
             # Construct hidden layers (Dense and Batch Normalization).
             for intermediate_dim in self._intermediate_dims:
@@ -187,9 +189,9 @@ class VAEHandler:
             # Add KLDivergenceLayer responsible for calculation of KL loss.
             z_mean, z_log_var = _KLDivergenceLayer()([z_mean, z_log_var])
             # Sample a probe from the distribution.
-            encoder_output = _Sampling()([z_mean, z_log_var])
+            encoder_output = _Sampling()([z_mean, z_log_var, eps_input])
             # Create model.
-            encoder = Model(inputs=[x_input, e_input, angle_input, geo_input], outputs=encoder_output,
+            encoder = Model(inputs=[x_input, e_input, angle_input, geo_input, eps_input], outputs=encoder_output,
                             name="encoder")
         return encoder
 
@@ -251,7 +253,8 @@ class VAEHandler:
         return callbacks
 
     def _get_train_and_val_data(self, dataset: np.array, e_cond: np.array, angle_cond: np.array, geo_cond: np.array,
-                                train_indexes: np.array, validation_indexes: np.array) -> Tuple[Dataset, Dataset]:
+                                noise: np.array, train_indexes: np.array, validation_indexes: np.array) \
+            -> Tuple[Dataset, Dataset]:
         """
         Splits data into train and validation set based on given lists of indexes.
 
@@ -262,30 +265,31 @@ class VAEHandler:
         train_e_cond = e_cond[train_indexes]
         train_angle_cond = angle_cond[train_indexes]
         train_geo_cond = geo_cond[train_indexes, :]
+        train_noise = noise[train_indexes, :]
 
         # Prepare validation data.
         val_dataset = dataset[validation_indexes, :]
         val_e_cond = e_cond[validation_indexes]
         val_angle_cond = angle_cond[validation_indexes]
         val_geo_cond = geo_cond[validation_indexes, :]
+        val_noise = noise[validation_indexes, :]
 
         # Gather them into tuples.
-        train_x = (train_dataset, train_e_cond, train_angle_cond, train_geo_cond)
+        train_x = (train_dataset, train_e_cond, train_angle_cond, train_geo_cond, train_noise)
         train_y = train_dataset
-        val_x = (val_dataset, val_e_cond, val_angle_cond, val_geo_cond)
+        val_x = (val_dataset, val_e_cond, val_angle_cond, val_geo_cond, val_noise)
         val_y = val_dataset
 
         # Wrap data in Dataset objects.
+        # TODO(@mdragula): This approach requires loading the whole data set to RAM. It
+        #  would be better to read the data partially when needed. Also one should bare in mind that using tf.Dataset
+        #  slows down training process.
         train_data = Dataset.from_tensor_slices((train_x, train_y))
         val_data = Dataset.from_tensor_slices((val_x, val_y))
 
         # The batch size must now be set on the Dataset objects.
         train_data = train_data.batch(self._batch_size)
         val_data = val_data.batch(self._batch_size)
-
-        # Shuffle dataset.
-        train_data = train_data.shuffle(BUFFER_SIZE, reshuffle_each_iteration=True)
-        val_data = val_data.shuffle(BUFFER_SIZE, reshuffle_each_iteration=True)
 
         # Disable AutoShard.
         options = tf.data.Options()
@@ -296,7 +300,7 @@ class VAEHandler:
         return train_data, val_data
 
     def _k_fold_training(self, dataset: np.array, e_cond: np.array, angle_cond: np.array, geo_cond: np.array,
-                         callbacks: List[Callback], verbose: bool = True) -> List[History]:
+                         noise: np.array, callbacks: List[Callback], verbose: bool = True) -> List[History]:
         """
         Performs K-fold cross validation training.
 
@@ -308,6 +312,7 @@ class VAEHandler:
             e_cond: A matrix representing an energy for each sample. Shape = (number of samples, ).
             angle_cond: A matrix representing an angle for each sample. Shape = (number of samples, ).
             geo_cond: A matrix representing a geometry of the detector for each sample. Shape = (number of samples, 2).
+            noise: A matrix representing an additional noise needed to perform a reparametrization trick.
             callbacks: A list of callback forwarded to the fitting function.
             verbose: A boolean which says there the training should be performed in a verbose mode or not.
 
@@ -322,8 +327,8 @@ class VAEHandler:
 
         for i, (train_indexes, validation_indexes) in enumerate(k_fold.split(dataset)):
             print(f"K-fold: {i + 1}/{self._number_of_k_fold_splits}...")
-            train_data, val_data = self._get_train_and_val_data(dataset, e_cond, angle_cond, geo_cond, train_indexes,
-                                                                validation_indexes)
+            train_data, val_data = self._get_train_and_val_data(dataset, e_cond, angle_cond, geo_cond, noise,
+                                                                train_indexes, validation_indexes)
 
             self._build_and_compile_new_model()
 
@@ -331,7 +336,7 @@ class VAEHandler:
                                      shuffle=True,
                                      epochs=self._epochs,
                                      verbose=verbose,
-                                     validation_data=(val_data, None),
+                                     validation_data=val_data,
                                      callbacks=callbacks
                                      )
             histories.append(history)
@@ -350,7 +355,7 @@ class VAEHandler:
         return histories
 
     def _single_training(self, dataset: np.array, e_cond: np.array, angle_cond: np.array, geo_cond: np.array,
-                         callbacks: List[Callback], verbose: bool = True) -> List[History]:
+                         noise: np.ndarray, callbacks: List[Callback], verbose: bool = True) -> List[History]:
         """
         Performs a single training.
 
@@ -362,6 +367,7 @@ class VAEHandler:
             e_cond: A matrix representing an energy for each sample. Shape = (number of samples, ).
             angle_cond: A matrix representing an angle for each sample. Shape = (number of samples, ).
             geo_cond: A matrix representing a geometry of the detector for each sample. Shape = (number of samples, 2).
+            noise: A matrix representing an additional noise needed to perform a reparametrization trick.
             callbacks: A list of callback forwarded to the fitting function.
             verbose: A boolean which says there the training should be performed in a verbose mode or not.
 
@@ -375,7 +381,7 @@ class VAEHandler:
         split = int(dataset_size * self._validation_split)
         train_indexes, validation_indexes = permutation[split:], permutation[:split]
 
-        train_data, val_data = self._get_train_and_val_data(dataset, e_cond, angle_cond, geo_cond, train_indexes,
+        train_data, val_data = self._get_train_and_val_data(dataset, e_cond, angle_cond, geo_cond, noise, train_indexes,
                                                             validation_indexes)
 
         history = self.model.fit(x=train_data,
@@ -383,7 +389,6 @@ class VAEHandler:
                                  epochs=self._epochs,
                                  verbose=verbose,
                                  validation_data=val_data,
-                                 batch_size=self._batch_size_per_replica,
                                  callbacks=callbacks
                                  )
         if self._save_best_model:
@@ -416,7 +421,9 @@ class VAEHandler:
 
         callbacks = self._manufacture_callbacks()
 
+        noise = np.random.normal(0, 1, size=(dataset.shape[0], self.latent_dim))
+
         if self._number_of_k_fold_splits > 1:
-            return self._k_fold_training(dataset, e_cond, angle_cond, geo_cond, callbacks, verbose)
+            return self._k_fold_training(dataset, e_cond, angle_cond, geo_cond, noise, callbacks, verbose)
         else:
-            return self._single_training(dataset, e_cond, angle_cond, geo_cond, callbacks, verbose)
+            return self._single_training(dataset, e_cond, angle_cond, geo_cond, noise, callbacks, verbose)

@@ -234,7 +234,7 @@ class VAEHandler:
         # improving after (patience) number of epochs.
         if self._early_stop:
             callbacks.append(
-                EarlyStopping(monitor="val_total_loss",
+                EarlyStopping(monitor="val_loss",
                               min_delta=self._min_delta,
                               patience=self._patience,
                               verbose=True,
@@ -242,7 +242,7 @@ class VAEHandler:
         # Save model after every epoch.
         if self._save_model_every_epoch:
             callbacks.append(ModelCheckpoint(filepath=f"{self._checkpoint_dir}/VAE_epoch_{{epoch:03}}/model_weights",
-                                             monitor="val_total_loss",
+                                             monitor="val_loss",
                                              verbose=True,
                                              save_weights_only=True,
                                              mode="min",

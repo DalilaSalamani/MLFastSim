@@ -1,7 +1,9 @@
 import argparse
 
-from core.constants import INIT_DIR, GEN_DIR, N_CELLS_PHI
-from utils.observables import *
+import numpy as np
+
+from core.constants import INIT_DIR, GEN_DIR, N_CELLS_PHI, N_CELLS_R, N_CELLS_Z
+from utils.observables import LongitudinalProfile, LateralProfile, Energy
 from utils.plotters import ProfilePlotter, EnergyPlotter
 from utils.preprocess import load_showers
 
@@ -45,7 +47,7 @@ def main():
 
     # 4. Plot observables
     longitudinal_profile_plotter = ProfilePlotter(particle_energy, particle_angle, geometry, full_sim_long, ml_sim_long,
-                                                  _plot_gaussian=True)
+                                                  _plot_gaussian=False)
     lateral_profile_plotter = ProfilePlotter(particle_energy, particle_angle,
                                              geometry, full_sim_lat, ml_sim_lat, _plot_gaussian=False)
     energy_plotter = EnergyPlotter(particle_energy, particle_angle, geometry, full_sim_energy, ml_sim_energy)

@@ -189,7 +189,7 @@ class HyperparameterTuner:
 
         # Return validation loss (currently it is treated as an objective goal). Notice that we take into account the
         # best model according to the validation loss.
-        final_validation_losses = [np.min(history.history["val_total_loss"]) for history in histories]
+        final_validation_losses = [np.min(history.history["val_loss"]) for history in histories]
         avg_validation_loss = np.mean(final_validation_losses).item()
         return avg_validation_loss
 

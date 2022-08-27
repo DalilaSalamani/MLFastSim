@@ -12,7 +12,7 @@ in [Par04](https://gitlab.cern.ch/geant4/geant4/-/tree/master/examples/extended/
 - generate.py: generate showers using a saved VAE model.
 - observables.py: defines a set of shower observables.
 - validate.py: creates validation plots using shower observables.
-- convert.py: defines the conversion function to and ONNX file.
+- convert.py: defines the conversion function to an ONNX file.
 - tune_model.py: performs hyperparameters optimization.
 
 ## Getting Started

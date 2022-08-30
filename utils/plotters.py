@@ -48,19 +48,23 @@ def _gaussian(x: np.ndarray, a: float, mu: float, sigma: float) -> np.ndarray:
     return a * np.exp(-((x - mu) ** 2 / (2 * sigma ** 2)))
 
 
-def _best_fit(data: np.ndarray, bins: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+def _best_fit(data: np.ndarray, bins: np.ndarray, hist: bool = False) -> Tuple[np.ndarray, np.ndarray]:
     """ Finds estimated shape of a Gaussian using Use non-linear least squares.
 
     Args:
         data: A numpy array with values of observables from multiple events.
         bins: A numpy array specifying histogram bins.
+        hist: If histogram is calculated. Then data is the frequencies.
 
     Returns:
         A tuple of two lists. Xs and Ys of predicted curve.
 
     """
     # Calculate histogram.
-    hist, _ = np.histogram(data, bins)
+    if not hist:
+        hist, _ = np.histogram(data, bins)
+    else:
+        hist = data
 
     # Choose only those bins which are nonzero. Nonzero() return a tuple of arrays. In this case it has a length = 1,
     # hence we are interested in its first element.
@@ -138,25 +142,34 @@ class ProfilePlotter(Plotter):
         """
         fig, axes = plt.subplots(2, 1, figsize=(15, 10), clear=True, sharex="all")
 
-        if plot_profile:
-            if self._profile_type == ProfileType.LONGITUDINAL:
-                x = np.arange(N_CELLS_Z)
-            else:
-                x = np.arange(N_CELLS_R)
-            # Create a data based on the weights provided by the user.
-            full_simulation = np.repeat(x, full_simulation.astype(int))
-            ml_simulation = np.repeat(x, ml_simulation.astype(int))
-
         # Plot histograms.
-        energy_full_sim, _, _ = axes[0].hist(x=full_simulation, bins=bins, label="FullSim", histtype=HISTOGRAM_TYPE,
-                                             color=FULL_SIM_HISTOGRAM_COLOR)
-        energy_ml_sim, _, _ = axes[0].hist(x=ml_simulation, bins=bins, label="MLSim", histtype=HISTOGRAM_TYPE,
-                                           color=ML_SIM_HISTOGRAM_COLOR)
+        if plot_profile:
+            # We already have the bins (layers) and freqencies (energies),
+            # therefore directly plotting a step plot + lines instead of a hist plot.
+            axes[0].step(bins[:-1], full_simulation, label="FullSim", color=FULL_SIM_HISTOGRAM_COLOR)
+            axes[0].step(bins[:-1], ml_simulation, label="MLSim", color=ML_SIM_HISTOGRAM_COLOR)
+            axes[0].vlines(x=bins[0], ymin=0, ymax=full_simulation[0], color=FULL_SIM_HISTOGRAM_COLOR)
+            axes[0].vlines(x=bins[-2], ymin=0, ymax=full_simulation[-1], color=FULL_SIM_HISTOGRAM_COLOR)
+            axes[0].vlines(x=bins[0], ymin=0, ymax=ml_simulation[0], color=ML_SIM_HISTOGRAM_COLOR)
+            axes[0].vlines(x=bins[-2], ymin=0, ymax=ml_simulation[-1], color=ML_SIM_HISTOGRAM_COLOR)
+            axes[0].set_ylim(0, None)
+
+            # For using it later for the ratios.
+            energy_full_sim, energy_ml_sim = full_simulation, ml_simulation
+        else:
+            energy_full_sim, _, _ = axes[0].hist(x=full_simulation, bins=bins, label="FullSim", histtype=HISTOGRAM_TYPE,
+                                                color=FULL_SIM_HISTOGRAM_COLOR)
+            energy_ml_sim, _, _ = axes[0].hist(x=ml_simulation, bins=bins, label="MLSim", histtype=HISTOGRAM_TYPE,
+                                            color=ML_SIM_HISTOGRAM_COLOR)
 
         # Plot Gaussians if needed.
         if self._plot_gaussian:
-            (xs_full_sim, ys_full_sim) = _best_fit(full_simulation, bins)
-            (xs_ml_sim, ys_ml_sim) = _best_fit(ml_simulation, bins)
+            if plot_profile:
+                (xs_full_sim, ys_full_sim) = _best_fit(full_simulation, bins, hist=True)
+                (xs_ml_sim, ys_ml_sim) = _best_fit(ml_simulation, bins, hist=True)
+            else:
+                (xs_full_sim, ys_full_sim) = _best_fit(full_simulation, bins)
+                (xs_ml_sim, ys_ml_sim) = _best_fit(ml_simulation, bins)
             axes[0].plot(xs_full_sim, ys_full_sim, color=FULL_SIM_GAUSSIAN_COLOR, label="FullSim")
             axes[0].plot(xs_ml_sim, ys_ml_sim, color=ML_SIM_GAUSSIAN_COLOR, label="MLSim")
 
@@ -192,11 +205,13 @@ class ProfilePlotter(Plotter):
         full_simulation_profile = self._full_simulation.calc_profile()
         ml_simulation_profile = self._ml_simulation.calc_profile()
         if self._profile_type == ProfileType.LONGITUDINAL:
-            bins = np.linspace(0, N_CELLS_Z - 1, N_CELLS_Z)
+            # matplotlib will include the right-limit for the last bar,
+            # hence extending by 1.
+            bins = np.linspace(0, N_CELLS_Z, N_CELLS_Z + 1)
             observable_name = "LongProf"
             xlabel = "Layer index"
         else:
-            bins = np.linspace(0, N_CELLS_R - 1, N_CELLS_R)
+            bins = np.linspace(0, N_CELLS_R, N_CELLS_R + 1)
             observable_name = "LatProf"
             xlabel = "R index"
         self._plot_and_save_customizable_histogram(

@@ -45,22 +45,28 @@ def _gaussian(x: np.ndarray, a: float, mu: float, sigma: float) -> np.ndarray:
         A value of a function for given arguments.
 
     """
-    return a * np.exp(-((x - mu) ** 2 / (2 * sigma ** 2)))
+    return a * np.exp(-((x - mu)**2 / (2 * sigma**2)))
 
 
-def _best_fit(data: np.ndarray, bins: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+def _best_fit(data: np.ndarray,
+              bins: np.ndarray,
+              hist: bool = False) -> Tuple[np.ndarray, np.ndarray]:
     """ Finds estimated shape of a Gaussian using Use non-linear least squares.
 
     Args:
         data: A numpy array with values of observables from multiple events.
         bins: A numpy array specifying histogram bins.
+        hist: If histogram is calculated. Then data is the frequencies.
 
     Returns:
         A tuple of two lists. Xs and Ys of predicted curve.
 
     """
     # Calculate histogram.
-    hist, _ = np.histogram(data, bins)
+    if not hist:
+        hist, _ = np.histogram(data, bins)
+    else:
+        hist = data
 
     # Choose only those bins which are nonzero. Nonzero() return a tuple of arrays. In this case it has a length = 1,
     # hence we are interested in its first element.
@@ -78,7 +84,12 @@ def _best_fit(data: np.ndarray, bins: np.ndarray) -> Tuple[np.ndarray, np.ndarra
     sigma0 = np.var(xs)
 
     # Fit a Gaussian to the prepared data.
-    (a, mu, sigma), _ = curve_fit(f=_gaussian, xdata=xs, ydata=ys_bar, p0=[a0, mu0, sigma0], method="trf", maxfev=1000)
+    (a, mu, sigma), _ = curve_fit(f=_gaussian,
+                                  xdata=xs,
+                                  ydata=ys_bar,
+                                  p0=[a0, mu0, sigma0],
+                                  method="trf",
+                                  maxfev=1000)
 
     # Calculate values of an approximation in given points and return values.
     ys = _gaussian(xs, a, mu, sigma)
@@ -114,10 +125,15 @@ class ProfilePlotter(Plotter):
         else:
             self._profile_type = ProfileType.LATERAL
 
-    def _plot_and_save_customizable_histogram(self, full_simulation: np.ndarray, ml_simulation: np.ndarray,
-                                              bins: np.ndarray, xlabel: str, observable_name: str,
-                                              plot_profile: bool = False,
-                                              y_log_scale: bool = False) -> None:
+    def _plot_and_save_customizable_histogram(
+            self,
+            full_simulation: np.ndarray,
+            ml_simulation: np.ndarray,
+            bins: np.ndarray,
+            xlabel: str,
+            observable_name: str,
+            plot_profile: bool = False,
+            y_log_scale: bool = False) -> None:
         """ Prepares and saves a histogram for a given pair of observables.
 
         Args:
@@ -136,29 +152,77 @@ class ProfilePlotter(Plotter):
             None.
 
         """
-        fig, axes = plt.subplots(2, 1, figsize=(15, 10), clear=True, sharex="all")
-
-        if plot_profile:
-            if self._profile_type == ProfileType.LONGITUDINAL:
-                x = np.arange(N_CELLS_Z)
-            else:
-                x = np.arange(N_CELLS_R)
-            # Create a data based on the weights provided by the user.
-            full_simulation = np.repeat(x, full_simulation.astype(int))
-            ml_simulation = np.repeat(x, ml_simulation.astype(int))
+        fig, axes = plt.subplots(2,
+                                 1,
+                                 figsize=(15, 10),
+                                 clear=True,
+                                 sharex="all")
 
         # Plot histograms.
-        energy_full_sim, _, _ = axes[0].hist(x=full_simulation, bins=bins, label="FullSim", histtype=HISTOGRAM_TYPE,
-                                             color=FULL_SIM_HISTOGRAM_COLOR)
-        energy_ml_sim, _, _ = axes[0].hist(x=ml_simulation, bins=bins, label="MLSim", histtype=HISTOGRAM_TYPE,
-                                           color=ML_SIM_HISTOGRAM_COLOR)
+        if plot_profile:
+            # We already have the bins (layers) and freqencies (energies),
+            # therefore directly plotting a step plot + lines instead of a hist plot.
+            axes[0].step(bins[:-1],
+                         full_simulation,
+                         label="FullSim",
+                         color=FULL_SIM_HISTOGRAM_COLOR)
+            axes[0].step(bins[:-1],
+                         ml_simulation,
+                         label="MLSim",
+                         color=ML_SIM_HISTOGRAM_COLOR)
+            axes[0].vlines(x=bins[0],
+                           ymin=0,
+                           ymax=full_simulation[0],
+                           color=FULL_SIM_HISTOGRAM_COLOR)
+            axes[0].vlines(x=bins[-2],
+                           ymin=0,
+                           ymax=full_simulation[-1],
+                           color=FULL_SIM_HISTOGRAM_COLOR)
+            axes[0].vlines(x=bins[0],
+                           ymin=0,
+                           ymax=ml_simulation[0],
+                           color=ML_SIM_HISTOGRAM_COLOR)
+            axes[0].vlines(x=bins[-2],
+                           ymin=0,
+                           ymax=ml_simulation[-1],
+                           color=ML_SIM_HISTOGRAM_COLOR)
+            axes[0].set_ylim(0, None)
+
+            # For using it later for the ratios.
+            energy_full_sim, energy_ml_sim = full_simulation, ml_simulation
+        else:
+            energy_full_sim, _, _ = axes[0].hist(
+                x=full_simulation,
+                bins=bins,
+                label="FullSim",
+                histtype=HISTOGRAM_TYPE,
+                color=FULL_SIM_HISTOGRAM_COLOR)
+            energy_ml_sim, _, _ = axes[0].hist(x=ml_simulation,
+                                               bins=bins,
+                                               label="MLSim",
+                                               histtype=HISTOGRAM_TYPE,
+                                               color=ML_SIM_HISTOGRAM_COLOR)
 
         # Plot Gaussians if needed.
         if self._plot_gaussian:
-            (xs_full_sim, ys_full_sim) = _best_fit(full_simulation, bins)
-            (xs_ml_sim, ys_ml_sim) = _best_fit(ml_simulation, bins)
-            axes[0].plot(xs_full_sim, ys_full_sim, color=FULL_SIM_GAUSSIAN_COLOR, label="FullSim")
-            axes[0].plot(xs_ml_sim, ys_ml_sim, color=ML_SIM_GAUSSIAN_COLOR, label="MLSim")
+            if plot_profile:
+                (xs_full_sim, ys_full_sim) = _best_fit(full_simulation,
+                                                       bins,
+                                                       hist=True)
+                (xs_ml_sim, ys_ml_sim) = _best_fit(ml_simulation,
+                                                   bins,
+                                                   hist=True)
+            else:
+                (xs_full_sim, ys_full_sim) = _best_fit(full_simulation, bins)
+                (xs_ml_sim, ys_ml_sim) = _best_fit(ml_simulation, bins)
+            axes[0].plot(xs_full_sim,
+                         ys_full_sim,
+                         color=FULL_SIM_GAUSSIAN_COLOR,
+                         label="FullSim")
+            axes[0].plot(xs_ml_sim,
+                         ys_ml_sim,
+                         color=ML_SIM_GAUSSIAN_COLOR,
+                         label="MLSim")
 
         if y_log_scale:
             axes[0].set_yscale("log")
@@ -166,10 +230,14 @@ class ProfilePlotter(Plotter):
         axes[0].set_xlabel(xlabel)
         axes[0].set_ylabel("Energy [Mev]")
         axes[0].set_title(
-            f" $e^-$, {self._particle_energy} [GeV], {self._particle_angle}$^{{\circ}}$, {self._geometry}")
+            f" $e^-$, {self._particle_energy} [GeV], {self._particle_angle}$^{{\circ}}$, {self._geometry}"
+        )
 
         # Calculate ratios.
-        ratio = np.divide(energy_ml_sim, energy_full_sim, out=np.ones_like(energy_ml_sim), where=(energy_full_sim != 0))
+        ratio = np.divide(energy_ml_sim,
+                          energy_full_sim,
+                          out=np.ones_like(energy_ml_sim),
+                          where=(energy_full_sim != 0))
         # Since len(bins) == 1 + data, we calculate middles of bins as xs.
         bins_middles = (bins[:-1] + bins[1:]) / 2
         axes[1].plot(bins_middles, ratio, "-o")
@@ -177,9 +245,8 @@ class ProfilePlotter(Plotter):
         axes[1].set_ylabel("MLSim/FullSim")
         axes[1].axhline(y=1, color="black")
         plt.savefig(
-            f"{VALID_DIR}/{observable_name}_Geo_{self._geometry}_E_{self._particle_energy}_" +
-            f"Angle_{self._particle_angle}.png"
-        )
+            f"{VALID_DIR}/{observable_name}_Geo_{self._geometry}_E_{self._particle_energy}_"
+            + f"Angle_{self._particle_angle}.png")
         plt.clf()
 
     def _plot_profile(self) -> None:
@@ -192,15 +259,21 @@ class ProfilePlotter(Plotter):
         full_simulation_profile = self._full_simulation.calc_profile()
         ml_simulation_profile = self._ml_simulation.calc_profile()
         if self._profile_type == ProfileType.LONGITUDINAL:
-            bins = np.linspace(0, N_CELLS_Z - 1, N_CELLS_Z)
+            # matplotlib will include the right-limit for the last bar,
+            # hence extending by 1.
+            bins = np.linspace(0, N_CELLS_Z, N_CELLS_Z + 1)
             observable_name = "LongProf"
             xlabel = "Layer index"
         else:
-            bins = np.linspace(0, N_CELLS_R - 1, N_CELLS_R)
+            bins = np.linspace(0, N_CELLS_R, N_CELLS_R + 1)
             observable_name = "LatProf"
             xlabel = "R index"
-        self._plot_and_save_customizable_histogram(
-            full_simulation_profile, ml_simulation_profile, bins, xlabel, observable_name, plot_profile=True)
+        self._plot_and_save_customizable_histogram(full_simulation_profile,
+                                                   ml_simulation_profile,
+                                                   bins,
+                                                   xlabel,
+                                                   observable_name,
+                                                   plot_profile=True)
 
     def _plot_first_moment(self) -> None:
         """ Plots and saves a first moment of an observable's profile.
@@ -209,7 +282,8 @@ class ProfilePlotter(Plotter):
             None.
 
         """
-        full_simulation_first_moment = self._full_simulation.calc_first_moment()
+        full_simulation_first_moment = self._full_simulation.calc_first_moment(
+        )
         ml_simulation_first_moment = self._ml_simulation.calc_first_moment()
         if self._profile_type == ProfileType.LONGITUDINAL:
             xlabel = "$<\lambda> [mm]$"
@@ -220,8 +294,9 @@ class ProfilePlotter(Plotter):
             observable_name = "LatFirstMoment"
             bins = np.linspace(0, 0.75 * N_CELLS_R * SIZE_R, 128)
 
-        self._plot_and_save_customizable_histogram(full_simulation_first_moment, ml_simulation_first_moment, bins,
-                                                   xlabel, observable_name)
+        self._plot_and_save_customizable_histogram(
+            full_simulation_first_moment, ml_simulation_first_moment, bins,
+            xlabel, observable_name)
 
     def _plot_second_moment(self) -> None:
         """ Plots and saves a second moment of an observable's profile.
@@ -230,7 +305,8 @@ class ProfilePlotter(Plotter):
             None.
 
         """
-        full_simulation_second_moment = self._full_simulation.calc_second_moment()
+        full_simulation_second_moment = self._full_simulation.calc_second_moment(
+        )
         ml_simulation_second_moment = self._ml_simulation.calc_second_moment()
         if self._profile_type == ProfileType.LONGITUDINAL:
             xlabel = "$<\lambda^{2}> [mm^{2}]$"
@@ -241,8 +317,9 @@ class ProfilePlotter(Plotter):
             observable_name = "LatSecondMoment"
             bins = np.linspace(0, pow(N_CELLS_R * SIZE_R, 2) / 8., 128)
 
-        self._plot_and_save_customizable_histogram(full_simulation_second_moment, ml_simulation_second_moment, bins,
-                                                   xlabel, observable_name)
+        self._plot_and_save_customizable_histogram(
+            full_simulation_second_moment, ml_simulation_second_moment, bins,
+            xlabel, observable_name)
 
     def plot_and_save(self) -> None:
         """ Main plotting function.
@@ -287,12 +364,16 @@ class EnergyPlotter(Plotter):
             None.
 
         """
-        full_simulation_total_energy = self._full_simulation.calc_total_energy()
+        full_simulation_total_energy = self._full_simulation.calc_total_energy(
+        )
         ml_simulation_total_energy = self._ml_simulation.calc_total_energy()
 
         plt.figure(figsize=(12, 8))
-        bins = np.linspace(np.min(full_simulation_total_energy) - np.min(full_simulation_total_energy) * 0.05,
-                           np.max(full_simulation_total_energy) + np.max(full_simulation_total_energy) * 0.05, 50)
+        bins = np.linspace(
+            np.min(full_simulation_total_energy) -
+            np.min(full_simulation_total_energy) * 0.05,
+            np.max(full_simulation_total_energy) +
+            np.max(full_simulation_total_energy) * 0.05, 50)
         plt.hist(x=full_simulation_total_energy,
                  histtype=HISTOGRAM_TYPE,
                  label="FullSim",
@@ -308,9 +389,12 @@ class EnergyPlotter(Plotter):
             plt.yscale("log")
         plt.xlabel("Energy [MeV]")
         plt.ylabel("# events")
-        plt.title(f" $e^-$, {self._particle_energy} [GeV], {self._particle_angle}$^{{\circ}}$, {self._geometry} ")
+        plt.title(
+            f" $e^-$, {self._particle_energy} [GeV], {self._particle_angle}$^{{\circ}}$, {self._geometry} "
+        )
         plt.savefig(
-            f"{VALID_DIR}/E_tot_Geo_{self._geometry}_E_{self._particle_energy}_Angle_{self._particle_angle}.png")
+            f"{VALID_DIR}/E_tot_Geo_{self._geometry}_E_{self._particle_energy}_Angle_{self._particle_angle}.png"
+        )
         plt.clf()
 
     def _plot_cell_energy(self) -> None:
@@ -324,12 +408,14 @@ class EnergyPlotter(Plotter):
         full_simulation_cell_energy = self._full_simulation.calc_cell_energy()
         ml_simulation_cell_energy = self._ml_simulation.calc_cell_energy()
 
-        log_full_simulation_cell_energy = np.log10(full_simulation_cell_energy,
-                                                   out=np.zeros_like(full_simulation_cell_energy),
-                                                   where=(full_simulation_cell_energy != 0))
-        log_ml_simulation_cell_energy = np.log10(ml_simulation_cell_energy,
-                                                 out=np.zeros_like(ml_simulation_cell_energy),
-                                                 where=(ml_simulation_cell_energy != 0))
+        log_full_simulation_cell_energy = np.log10(
+            full_simulation_cell_energy,
+            out=np.zeros_like(full_simulation_cell_energy),
+            where=(full_simulation_cell_energy != 0))
+        log_ml_simulation_cell_energy = np.log10(
+            ml_simulation_cell_energy,
+            out=np.zeros_like(ml_simulation_cell_energy),
+            where=(ml_simulation_cell_energy != 0))
         plt.figure(figsize=(12, 8))
         bins = np.linspace(-4, 1, 1000)
         plt.hist(x=log_full_simulation_cell_energy,
@@ -347,7 +433,9 @@ class EnergyPlotter(Plotter):
         plt.yscale("log")
         plt.ylim(bottom=1)
         plt.ylabel("# entries")
-        plt.title(f" $e^-$, {self._particle_energy} [GeV], {self._particle_angle}$^{{\circ}}$, {self._geometry} ")
+        plt.title(
+            f" $e^-$, {self._particle_energy} [GeV], {self._particle_angle}$^{{\circ}}$, {self._geometry} "
+        )
         plt.grid(True)
         plt.legend(loc="upper left")
         plt.savefig(
@@ -362,8 +450,10 @@ class EnergyPlotter(Plotter):
             None.
 
         """
-        full_simulation_energy_per_layer = self._full_simulation.calc_energy_per_layer()
-        ml_simulation_energy_per_layer = self._ml_simulation.calc_energy_per_layer()
+        full_simulation_energy_per_layer = self._full_simulation.calc_energy_per_layer(
+        )
+        ml_simulation_energy_per_layer = self._ml_simulation.calc_energy_per_layer(
+        )
 
         number_of_plots_in_row = 9
         number_of_plots_in_column = 5
@@ -371,8 +461,12 @@ class EnergyPlotter(Plotter):
         bins = np.linspace(np.min(full_simulation_energy_per_layer - 10),
                            np.max(full_simulation_energy_per_layer + 10), 25)
 
-        fig, ax = plt.subplots(number_of_plots_in_column, number_of_plots_in_row, figsize=(20, 15), sharex="all",
-                               sharey="all", constrained_layout=True)
+        fig, ax = plt.subplots(number_of_plots_in_column,
+                               number_of_plots_in_row,
+                               figsize=(20, 15),
+                               sharex="all",
+                               sharey="all",
+                               constrained_layout=True)
 
         for layer_nb in range(N_CELLS_Z):
             i = layer_nb // number_of_plots_in_row
@@ -394,7 +488,9 @@ class EnergyPlotter(Plotter):
 
         fig.supxlabel("Energy [MeV]", fontsize=14)
         fig.supylabel("# entries", fontsize=14)
-        fig.suptitle(f" $e^-$, {self._particle_energy} [GeV], {self._particle_angle}$^{{\circ}}$, {self._geometry} ")
+        fig.suptitle(
+            f" $e^-$, {self._particle_energy} [GeV], {self._particle_angle}$^{{\circ}}$, {self._geometry} "
+        )
 
         # Take legend from one plot and make it a global legend.
         handles, labels = ax[0][0].get_legend_handles_labels()

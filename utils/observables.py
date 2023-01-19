@@ -95,7 +95,7 @@ class LongitudinalProfile(Profile):
         SM[e] = (sum_{i = 0}^{Z - 1} (w[i] - alpha - FM[e])^2 * energies_per_event[e, i]) total_energy_per_event[e],
         where
         w = [0, 1, 2, ..., Z - 1],
-        alpha = SIZE_Z defined in ochre/constants.py
+        alpha = SIZE_Z defined in core/constants.py
 
         Returns:
             A numpy array of second moments of longitudinal profiles for each event with a shape = (NE, ).
@@ -160,7 +160,7 @@ class LateralProfile(Profile):
         SM[e] = (sum_{i = 0}^{R - 1} (w[i] - alpha - FM[e])^2 * energies_per_event[e, i]) total_energy_per_event[e],
         where
         w = [0, 1, 2, ..., R - 1],
-        alpha = SIZE_R defined in ochre/constants.py
+        alpha = SIZE_R defined in core/constants.py
 
         Returns:
             A numpy array of second moments of lateral profiles for each event with a shape = (NE, ).

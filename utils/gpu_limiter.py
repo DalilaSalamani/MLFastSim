@@ -16,20 +16,26 @@ class GPULimiter:
         _max_gpu_memory_allocation: An integer specifying limit of allocated memory per logical device.
 
     """
+
     _gpu_ids: str
     _max_gpu_memory_allocation: int
 
-    def __call__(self):
+    def __call__(self) -> None:
         os.environ["CUDA_VISIBLE_DEVICES"] = f"{self._gpu_ids}"
-        gpus = tf.config.list_physical_devices('GPU')
+        gpus = tf.config.list_physical_devices("GPU")
         if gpus:
             # Restrict TensorFlow to only allocate max_gpu_memory_allocation*1024 MB of memory on one of the GPUs
             try:
                 for gpu in gpus:
                     tf.config.set_logical_device_configuration(
                         gpu,
-                        [tf.config.LogicalDeviceConfiguration(memory_limit=1024 * self._max_gpu_memory_allocation)])
-                logical_gpus = tf.config.list_logical_devices('GPU')
+                        [
+                            tf.config.LogicalDeviceConfiguration(
+                                memory_limit=1024 * self._max_gpu_memory_allocation
+                            )
+                        ],
+                    )
+                logical_gpus = tf.config.list_logical_devices("GPU")
                 print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
             except RuntimeError as e:
                 # Virtual devices must be set before GPUs have been initialized

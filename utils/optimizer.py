@@ -1,10 +1,21 @@
 from enum import IntEnum
+from typing import Type
 
-from tensorflow.keras.optimizers import Optimizer, Adadelta, Adagrad, Adam, Adamax, Ftrl, SGD, Nadam, RMSprop
+from tensorflow.keras.optimizers import (
+    SGD,
+    Adadelta,
+    Adagrad,
+    Adam,
+    Adamax,
+    Ftrl,
+    Nadam,
+    Optimizer,
+    RMSprop,
+)
 
 
 class OptimizerType(IntEnum):
-    """ Enum class of various optimizer types.
+    """Enum class of various optimizer types.
 
     This class must be IntEnum to be JSON serializable. This feature is important because, when Optuna's study is
     saved in a relational DB, all objects must be JSON serializable.
@@ -21,11 +32,12 @@ class OptimizerType(IntEnum):
 
 
 class OptimizerFactory:
-    """Factory of optimizer like Stochastic Gradient Descent, RMSProp, Adam, etc.
-    """
+    """Factory of optimizer like Stochastic Gradient Descent, RMSProp, Adam, etc."""
 
     @staticmethod
-    def create_optimizer(optimizer_type: OptimizerType, learning_rate: float) -> Optimizer:
+    def create_optimizer(
+        optimizer_type: OptimizerType, learning_rate: float
+    ) -> Type[Optimizer]:
         """For a given type and a learning rate creates an instance of optimizer.
 
         Args:

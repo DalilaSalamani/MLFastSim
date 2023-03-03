@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Tuple, Dict, Any, List
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 from optuna import Trial, create_study, get_all_study_summaries, load_study
@@ -7,9 +7,20 @@ from optuna.pruners import MedianPruner
 from optuna.samplers import TPESampler
 from optuna.trial import TrialState
 
-from core.constants import LEARNING_RATE, BATCH_SIZE_PER_REPLICA, ACTIVATION, OUT_ACTIVATION, \
-    OPTIMIZER_TYPE, KERNEL_INITIALIZER, BIAS_INITIALIZER, N_TRIALS, LATENT_DIM, \
-    INTERMEDIATE_DIMS, MAX_HIDDEN_LAYER_DIM, GLOBAL_CHECKPOINT_DIR
+from core.constants import (
+    ACTIVATION,
+    BATCH_SIZE_PER_REPLICA,
+    BIAS_INITIALIZER,
+    GLOBAL_CHECKPOINT_DIR,
+    INTERMEDIATE_DIMS,
+    KERNEL_INITIALIZER,
+    LATENT_DIM,
+    LEARNING_RATE,
+    MAX_HIDDEN_LAYER_DIM,
+    N_TRIALS,
+    OPTIMIZER_TYPE,
+    OUT_ACTIVATION,
+)
 from core.model import VAEHandler
 from utils.preprocess import preprocess
 
@@ -30,39 +41,66 @@ class HyperparameterTuner:
         _study_name: A string, a name of study.
 
     """
+
     _discrete_parameters: Dict[str, Tuple[int, int]]
     _continuous_parameters: Dict[str, Tuple[float, float]]
     _categorical_parameters: Dict[str, List[Any]]
     _storage: str = None
     _study_name: str = None
 
-    def _check_hyperparameters(self):
-        available_hyperparameters = ["latent_dim", "nb_hidden_layers", "learning_rate", "activation", "out_activation",
-                                     "optimizer_type", "kernel_initializer", "bias_initializer",
-                                     "batch_size_per_replica"]
-        hyperparameters_to_be_optimized = list(self._discrete_parameters.keys()) + list(
-            self._continuous_parameters.keys()) + list(self._categorical_parameters.keys())
+    def _check_hyperparameters(self) -> None:
+        available_hyperparameters: List[str] = [
+            "latent_dim",
+            "nb_hidden_layers",
+            "learning_rate",
+            "activation",
+            "out_activation",
+            "optimizer_type",
+            "kernel_initializer",
+            "bias_initializer",
+            "batch_size_per_replica",
+        ]
+        hyperparameters_to_be_optimized: List = (
+            list(self._discrete_parameters.keys())
+            + list(self._continuous_parameters.keys())
+            + list(self._categorical_parameters.keys())
+        )
         for hyperparameter_name in hyperparameters_to_be_optimized:
             if hyperparameter_name not in available_hyperparameters:
                 raise Exception(f"Unknown hyperparameter: {hyperparameter_name}")
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self._check_hyperparameters()
-        self._energies_train, self._cond_e_train, self._cond_angle_train, self._cond_geo_train = preprocess()
+        (
+            self._energies_train,
+            self._cond_e_train,
+            self._cond_angle_train,
+            self._cond_geo_train,
+        ) = preprocess()
 
         if self._storage is not None and self._study_name is not None:
             # Parallel optimization
             study_summaries = get_all_study_summaries(self._storage)
-            if any(self._study_name == study_summary.study_name for study_summary in study_summaries):
+            if any(
+                self._study_name == study_summary.study_name
+                for study_summary in study_summaries
+            ):
                 # The study is already created in the database. Load it.
                 self._study = load_study(self._study_name, self._storage)
             else:
                 # The study does not exist in the database. Create a new one.
-                self._study = create_study(storage=self._storage, sampler=TPESampler(), pruner=MedianPruner(),
-                                           study_name=self._study_name, direction="minimize")
+                self._study = create_study(
+                    storage=self._storage,
+                    sampler=TPESampler(),
+                    pruner=MedianPruner(),
+                    study_name=self._study_name,
+                    direction="minimize",
+                )
         else:
             # Single optimization
-            self._study = create_study(sampler=TPESampler(), pruner=MedianPruner(), direction="minimize")
+            self._study = create_study(
+                sampler=TPESampler(), pruner=MedianPruner(), direction="minimize"
+            )
 
     def _create_model_handler(self, trial: Trial) -> VAEHandler:
         """For a given trail builds the model.
@@ -80,16 +118,20 @@ class HyperparameterTuner:
 
         # Discrete parameters
         if "latent_dim" in self._discrete_parameters.keys():
-            latent_dim = trial.suggest_int(name="latent_dim",
-                                           low=self._discrete_parameters["latent_dim"][0],
-                                           high=self._discrete_parameters["latent_dim"][1])
+            latent_dim: int = trial.suggest_int(
+                name="latent_dim",
+                low=self._discrete_parameters["latent_dim"][0],
+                high=self._discrete_parameters["latent_dim"][1],
+            )
         else:
-            latent_dim = LATENT_DIM
+            latent_dim: int = LATENT_DIM
 
         if "nb_hidden_layers" in self._discrete_parameters.keys():
-            nb_hidden_layers = trial.suggest_int(name="nb_hidden_layers",
-                                                 low=self._discrete_parameters["nb_hidden_layers"][0],
-                                                 high=self._discrete_parameters["nb_hidden_layers"][1])
+            nb_hidden_layers: int = trial.suggest_int(
+                name="nb_hidden_layers",
+                low=self._discrete_parameters["nb_hidden_layers"][0],
+                high=self._discrete_parameters["nb_hidden_layers"][1],
+            )
 
             all_possible = np.arange(start=latent_dim + 5, stop=MAX_HIDDEN_LAYER_DIM)
             chunks = np.array_split(all_possible, nb_hidden_layers)
@@ -97,76 +139,95 @@ class HyperparameterTuner:
             ranges = reversed(ranges)
 
             # Cast from np.int to int allows to become JSON serializable.
-            intermediate_dims = [trial.suggest_int(name=f"intermediate_dim_{i}", low=int(low), high=int(high)) for
-                                 i, (low, high)
-                                 in enumerate(ranges)]
+            intermediate_dims: int = [
+                trial.suggest_int(
+                    name=f"intermediate_dim_{i}", low=int(low), high=int(high)
+                )
+                for i, (low, high) in enumerate(ranges)
+            ]
         else:
-            intermediate_dims = INTERMEDIATE_DIMS
+            intermediate_dims: int = INTERMEDIATE_DIMS
 
         if "batch_size_per_replica" in self._discrete_parameters.keys():
-            batch_size_per_replica = trial.suggest_int(name="batch_size_per_replica",
-                                                       low=self._discrete_parameters["batch_size_per_replica"][0],
-                                                       high=self._discrete_parameters["batch_size_per_replica"][1])
+            batch_size_per_replica: int = trial.suggest_int(
+                name="batch_size_per_replica",
+                low=self._discrete_parameters["batch_size_per_replica"][0],
+                high=self._discrete_parameters["batch_size_per_replica"][1],
+            )
         else:
-            batch_size_per_replica = BATCH_SIZE_PER_REPLICA
+            batch_size_per_replica: int = BATCH_SIZE_PER_REPLICA
 
         # Continuous parameters
         if "learning_rate" in self._continuous_parameters.keys():
-            learning_rate = trial.suggest_float(name="learning_rate",
-                                                low=self._continuous_parameters["learning_rate"][0],
-                                                high=self._continuous_parameters["learning_rate"][1])
+            learning_rate: float = trial.suggest_float(
+                name="learning_rate",
+                low=self._continuous_parameters["learning_rate"][0],
+                high=self._continuous_parameters["learning_rate"][1],
+            )
         else:
-            learning_rate = LEARNING_RATE
+            learning_rate: float = LEARNING_RATE
 
         # Categorical parameters
         if "activation" in self._categorical_parameters.keys():
-            activation = trial.suggest_categorical(name="activation",
-                                                   choices=self._categorical_parameters["activation"])
+            activation = trial.suggest_categorical(
+                name="activation", choices=self._categorical_parameters["activation"]
+            )
         else:
             activation = ACTIVATION
 
         if "out_activation" in self._categorical_parameters.keys():
-            out_activation = trial.suggest_categorical(name="out_activation",
-                                                       choices=self._categorical_parameters["out_activation"])
+            out_activation = trial.suggest_categorical(
+                name="out_activation",
+                choices=self._categorical_parameters["out_activation"],
+            )
         else:
             out_activation = OUT_ACTIVATION
 
         if "optimizer_type" in self._categorical_parameters.keys():
-            optimizer_type = trial.suggest_categorical(name="optimizer_type",
-                                                       choices=self._categorical_parameters["optimizer_type"])
+            optimizer_type = trial.suggest_categorical(
+                name="optimizer_type",
+                choices=self._categorical_parameters["optimizer_type"],
+            )
         else:
             optimizer_type = OPTIMIZER_TYPE
 
         if "kernel_initializer" in self._categorical_parameters.keys():
-            kernel_initializer = trial.suggest_categorical(name="kernel_initializer",
-                                                           choices=self._categorical_parameters["kernel_initializer"])
+            kernel_initializer = trial.suggest_categorical(
+                name="kernel_initializer",
+                choices=self._categorical_parameters["kernel_initializer"],
+            )
         else:
             kernel_initializer = KERNEL_INITIALIZER
 
         if "bias_initializer" in self._categorical_parameters.keys():
-            bias_initializer = trial.suggest_categorical(name="bias_initializer",
-                                                         choices=self._categorical_parameters["bias_initializer"])
+            bias_initializer = trial.suggest_categorical(
+                name="bias_initializer",
+                choices=self._categorical_parameters["bias_initializer"],
+            )
         else:
             bias_initializer = BIAS_INITIALIZER
 
-        checkpoint_dir = f"{GLOBAL_CHECKPOINT_DIR}/{self._study_name}/trial_{trial.number:03d}"
+        checkpoint_dir = (
+            f"{GLOBAL_CHECKPOINT_DIR}/{self._study_name}/trial_{trial.number:03d}"
+        )
 
-        return VAEHandler(_wandb_project_name=self._study_name,
-                          _wandb_tags=["hyperparameter tuning", f"trial {trial.number}"],
-                          _batch_size_per_replica=batch_size_per_replica,
-                          _intermediate_dims=intermediate_dims,
-                          latent_dim=latent_dim,
-                          _learning_rate=learning_rate,
-                          _activation=activation,
-                          _out_activation=out_activation,
-                          _optimizer_type=optimizer_type,
-                          _kernel_initializer=kernel_initializer,
-                          _bias_initializer=bias_initializer,
-                          _checkpoint_dir=checkpoint_dir,
-                          _early_stop=True,
-                          _save_model_every_epoch=False,
-                          _save_best_model=True,
-                          )
+        return VAEHandler(
+            _wandb_project_name=self._study_name,
+            _wandb_tags=["hyperparameter tuning", f"trial {trial.number}"],
+            _batch_size_per_replica=batch_size_per_replica,
+            _intermediate_dims=intermediate_dims,
+            latent_dim=latent_dim,
+            _learning_rate=learning_rate,
+            _activation=activation,
+            _out_activation=out_activation,
+            _optimizer_type=optimizer_type,
+            _kernel_initializer=kernel_initializer,
+            _bias_initializer=bias_initializer,
+            _checkpoint_dir=checkpoint_dir,
+            _early_stop=True,
+            _save_model_every_epoch=False,
+            _save_best_model=True,
+        )
 
     def _objective(self, trial: Trial) -> float:
         """For a given trial trains the model and returns an average validation loss.
@@ -184,12 +245,19 @@ class HyperparameterTuner:
 
         # Train the model.
         verbose = True
-        histories = model_handler.train(self._energies_train, self._cond_e_train, self._cond_angle_train,
-                                        self._cond_geo_train, verbose)
+        histories = model_handler.train(
+            self._energies_train,
+            self._cond_e_train,
+            self._cond_angle_train,
+            self._cond_geo_train,
+            verbose,
+        )
 
         # Return validation loss (currently it is treated as an objective goal). Notice that we take into account the
         # best model according to the validation loss.
-        final_validation_losses = [np.min(history.history["val_loss"]) for history in histories]
+        final_validation_losses = [
+            np.min(history.history["val_loss"]) for history in histories
+        ]
         avg_validation_loss = np.mean(final_validation_losses).item()
         return avg_validation_loss
 
@@ -200,9 +268,15 @@ class HyperparameterTuner:
         objective function and adjusted parameters).
         """
 
-        self._study.optimize(func=self._objective, n_trials=N_TRIALS, gc_after_trial=True)
-        pruned_trials = self._study.get_trials(deepcopy=False, states=(TrialState.PRUNED,))
-        complete_trials = self._study.get_trials(deepcopy=False, states=(TrialState.COMPLETE,))
+        self._study.optimize(
+            func=self._objective, n_trials=N_TRIALS, gc_after_trial=True
+        )
+        pruned_trials = self._study.get_trials(
+            deepcopy=False, states=(TrialState.PRUNED,)
+        )
+        complete_trials = self._study.get_trials(
+            deepcopy=False, states=(TrialState.COMPLETE,)
+        )
         print("Study statistics: ")
         print("  Number of finished trials: ", len(self._study.trials))
         print("  Number of pruned trials: ", len(pruned_trials))

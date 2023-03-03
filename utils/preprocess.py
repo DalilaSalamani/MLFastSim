@@ -1,11 +1,20 @@
+from typing import Tuple
+
 import h5py
 import numpy as np
 
-from core.constants import INIT_DIR, ORIGINAL_DIM, MAX_ENERGY, MAX_ANGLE, MIN_ANGLE, MIN_ENERGY
+from core.constants import (
+    INIT_DIR,
+    MAX_ANGLE,
+    MAX_ENERGY,
+    MIN_ANGLE,
+    MIN_ENERGY,
+    ORIGINAL_DIM,
+)
 
 
 # preprocess function loads the data and returns the array of the shower energies and the condition arrays
-def preprocess():
+def preprocess() -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     energies_train = []
     cond_e_train = []
     cond_angle_train = []
@@ -51,7 +60,9 @@ def preprocess():
 """
 
 
-def get_condition_arrays(geo, energy_particle, nb_events):
+def get_condition_arrays(
+    geo: str, energy_particle, nb_events: int
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     cond_e = [energy_particle / MAX_ENERGY] * nb_events
     cond_angle = [energy_particle / MAX_ENERGY] * nb_events
     if geo == "SiW":
@@ -73,7 +84,9 @@ def get_condition_arrays(geo, energy_particle, nb_events):
 """
 
 
-def load_showers(init_dir, geo, energy_particle, angle_particle):
+def load_showers(
+    init_dir: str, geo: str, energy_particle, angle_particle
+) -> np.ndarray:
     dir_geo = init_dir + geo + "/"
     f_name = f"{geo}_angle_{angle_particle}.h5"
     f_name = dir_geo + f_name
